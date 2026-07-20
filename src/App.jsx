@@ -1,27 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import './AdminPanel.css';
+import './App.css';
 
-function AdminPanel({ onBack }) {
+function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [pin, setPin] = useState('');
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({ totalUsers: 0, totalCoins: 0 });
   const [loading, setLoading] = useState(false);
   
-  // Tahrirlash moduli uchun state
+  // Tahrirlash holatlari
   const [editingUser, setEditingUser] = useState(null);
   const [newCoins, setNewCoins] = useState(0);
   const [newRating, setNewRating] = useState(0);
 
   const BACKEND_URL = "https://telegram-bot-server-2-matj.onrender.com";
-  const ADMIN_PIN = "2026"; // 🔒 Bu yerga o'zingizning maxfiy parolingizni yozing
+  const ADMIN_PIN = "2026"; 
 
-  // Admin tasdiqlangandan keyin ma'lumotlarni serverdan tortish
   useEffect(() => {
     if (!isAdmin) return;
-    
+    fetchData();
+  }, [isAdmin]);
+
+  const fetchData = () => {
     setLoading(true);
-    // 1. Barcha foydalanuvchilarni olish
     fetch(`${BACKEND_URL}/api/admin/users`, {
       headers: { 'X-Admin-Token': ADMIN_PIN }
     })
@@ -29,31 +30,30 @@ function AdminPanel({ onBack }) {
       .then(data => {
         if (data.success) {
           setUsers(data.users);
-          
-          // Umumiy statistikani hisoblash
           const totalCoins = data.users.reduce((sum, u) => sum + (u.coins || 0), 0);
-          setStats({
-            totalUsers: data.users.length,
-            totalCoins: totalCoins
-          });
+          setStats({ totalUsers: data.users.length, totalCoins: totalCoins });
         }
       })
-      .catch(err => console.error("Admin ma'lumot yuklashda xato:", err))
+      .catch(err => console.error("Ma'lumot yuklashda xatolik:", err))
       .finally(() => setLoading(false));
-  }, [isAdmin]);
+  };
 
-  // Pin kodni tekshirish
   const handleLogin = (e) => {
     e.preventDefault();
     if (pin === ADMIN_PIN) {
       setIsAdmin(true);
     } else {
-      alert("⚠️ Noto'g'ri maxfiy PIN kod!");
+      alert("⚠️ Maxfiy PIN-kod noto'g'ri!");
       setPin('');
     }
   };
 
-  // O'yinchi ma'lumotlarini o'zgartirish (Serverga saqlash)
+  const startEdit = (player) => {
+    setEditingUser(player);
+    setNewCoins(player.coins);
+    setNewRating(player.rating);
+  };
+
   const handleUpdateUser = (e) => {
     e.preventDefault();
     if (!editingUser) return;
@@ -73,131 +73,151 @@ function AdminPanel({ onBack }) {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert("✅ O'yinchi balansi muvaffaqiyatli yangilandi!");
-        // Mahalliy stateni yangilash
+        alert("✅ Foydalanuvchi ma'lumotlari muvaffaqiyatli yangilandi!");
         setUsers(users.map(u => u.tgId === editingUser.tgId ? { ...u, coins: Number(newCoins), rating: Number(newRating) } : u));
         setEditingUser(null);
+        // Umumiy statistikani qayta hisoblash
+        const updatedUsers = users.map(u => u.tgId === editingUser.tgId ? { ...u, coins: Number(newCoins), rating: Number(newRating) } : u);
+        setStats({
+          totalUsers: updatedUsers.length,
+          totalCoins: updatedUsers.reduce((sum, u) => sum + (u.coins || 0), 0)
+        });
       } else {
-        alert("Xatolik: Server yangilashni rad etdi.");
+        alert("Server o'zgarishni rad etdi.");
       }
     })
-    .catch(err => alert("Serverga ulanishda xatolik yuz berdi."));
+    .catch(() => alert("Serverga ulanish xatosi!"));
   };
 
-  // O'yinchini tahrirlash rejimiga o'tkazish
-  const startEdit = (player) => {
-    setEditingUser(player);
-    setNewCoins(player.coins);
-    setNewRating(player.rating);
-  };
-
-  // 🚪 PIN KOD SO'RASH EKRANI
+  // 🔐 1. LOGIN SCREEN
   if (!isAdmin) {
     return (
-      <div className="admin-login-screen">
-        <div className="login-box">
-          <h2>🔐 Admin Tizimi</h2>
-          <p>Davom etish uchun maxfiy PIN kodni kiriting:</p>
+      <div className="admin-login-container">
+        <div className="login-card">
+          <div className="lock-icon">🔐</div>
+          <h2>Like-Duel Admin</h2>
+          <p>Tizimga kirish uchun PIN-kodni kiriting</p>
           <form onSubmit={handleLogin}>
             <input 
               type="password" 
-              maxLength="6"
+              maxLength="6" 
               placeholder="••••" 
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
+              value={pin} 
+              onChange={(e) => setPin(e.target.value)} 
+              autoFocus
             />
-            <div className="login-actions">
-              <button type="button" className="btn-secondary" onClick={onBack}>Orqaga</button>
-              <button type="submit" className="btn-primary">Kirish</button>
-            </div>
+            <button type="submit" className="btn btn-login">Kirish</button>
           </form>
         </div>
       </div>
     );
   }
 
+  // 📊 2. MAIN DASHBOARD SCREEN
   return (
-    <div className="admin-panel-screen">
-      {/* Header */}
-      <div className="admin-header">
-        <button className="back-btn-small" onClick={onBack}>⬅️</button>
-        <h2>📊 Boshqaruv Paneli</h2>
-        <button className="logout-btn" onClick={() => setIsAdmin(false)}>Chiqish</button>
-      </div>
+    <div className="admin-dashboard">
+      {/* Navbar */}
+      <header className="dashboard-nav">
+        <div className="nav-brand">💥 Like-Duel Control Panel ⚙️</div>
+        <button className="btn btn-logout" onClick={() => setIsAdmin(false)}>🔒 Tizimdan Chiqish</button>
+      </header>
 
-      {/* Statistika Bloklari */}
-      <div className="admin-stats-row">
-        <div className="stat-card">
-          <span className="stat-title">Jami O'yinchilar</span>
-          <span className="stat-number">👥 {stats.totalUsers} ta</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-title">Tizimdagi Jami Tangalar</span>
-          <span className="stat-number">🪙 {stats.totalCoins}</span>
-        </div>
-      </div>
-
-      {/* O'yinchini tahrirlash Modal oynasi (Agar tanlangan bo'lsa) */}
-      {editingUser && (
-        <div className="admin-modal-overlay">
-          <div className="admin-modal">
-            <h3>📝 Balansni Tahrirlash</h3>
-            <p>O'yinchi: <strong>{editingUser.firstName}</strong> (@{editingUser.username || 'yoq'})</p>
-            <form onSubmit={handleUpdateUser}>
-              <div className="form-group">
-                <label>🪙 Tangalar miqdori:</label>
-                <input type="number" value={newCoins} onChange={(e) => setNewCoins(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>🏆 Reyting XP miqdori:</label>
-                <input type="number" value={newRating} onChange={(e) => setNewRating(e.target.value)} />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-secondary" onClick={() => setEditingUser(null)}>Bekor qilish</button>
-                <button type="submit" className="btn-primary">Saqlash</button>
-              </div>
-            </form>
+      <main className="dashboard-content">
+        {/* Analytics Cards */}
+        <section className="stats-grid">
+          <div className="card-stat">
+            <div className="stat-icon-box bg-blue">👥</div>
+            <div className="stat-info">
+              <h3>{stats.totalUsers} ta</h3>
+              <p>Jami Ro'yxatdan O'tganlar</p>
+            </div>
           </div>
-        </div>
-      )}
+          <div className="card-stat">
+            <div className="stat-icon-box bg-gold">🪙</div>
+            <div className="stat-info">
+              <h3>{stats.totalCoins.toLocaleString()}</h3>
+              <p>Tizimdagi Jami Tangalar</p>
+            </div>
+          </div>
+        </section>
 
-      {/* O'yinchilar Ro'yxati Jadvali */}
-      <h3>Foydalanuvchilar Ro'yxati</h3>
-      {loading ? (
-        <p className="loading-text">Yuklanmoqda...</p>
-      ) : (
-        <div className="admin-table-container">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Foydalanuvchi</th>
-                <th>🪙 Tangalar</th>
-                <th>🏆 XP</th>
-                <th>Boshqaruv</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(player => (
-                <tr key={player.tgId}>
-                  <td>
-                    <div className="table-user-info">
-                      <span className="t-name">{player.firstName}</span>
-                      <span className="t-id">ID: {player.tgId}</span>
-                    </div>
-                  </td>
-                  <td className="t-coins">🪙 {player.coins}</td>
-                  <td className="t-xp">{player.rating} XP</td>
-                  <td>
-                    <button className="btn-edit-small" onClick={() => startEdit(player)}>✏️ Edit</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        {/* Modal Editor */}
+        {editingUser && (
+          <div className="modal-backdrop">
+            <div className="modal-box">
+              <h3>✏️ O'yinchi Balansini Tahrirlash</h3>
+              <div className="user-meta">
+                <span>Ismi: <strong>{editingUser.firstName}</strong></span>
+                <span>ID: <code>{editingUser.tgId}</code></span>
+              </div>
+              <form onSubmit={handleUpdateUser}>
+                <div className="input-field">
+                  <label>🪙 O'yin Tangalari (Coins):</label>
+                  <input type="number" value={newCoins} onChange={(e) => setNewCoins(e.target.value)} />
+                </div>
+                <div className="input-field">
+                  <label>🏆 Tajriba Ochkosi (XP / Rating):</label>
+                  <input type="number" value={newRating} onChange={(e) => setNewRating(e.target.value)} />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn btn-cancel" onClick={() => setEditingUser(null)}>Bekor qilish</button>
+                  <button type="submit" className="btn btn-save">Saqlash</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Data Table */}
+        <section className="data-table-section">
+          <div className="section-header">
+            <h3>Foydalanuvchilar Ro'yxati</h3>
+            <button className="btn btn-refresh" onClick={fetchData}>🔄 Yangilash</button>
+          </div>
+
+          {loading ? (
+            <div className="table-loader">Ma'lumotlar yuklanmoqda, kuting...</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Foydalanuvchi</th>
+                    <th>Telegram Username</th>
+                    <th>🪙 Tangalar</th>
+                    <th>🏆 XP / Rating</th>
+                    <th>Harakat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(user => (
+                    <tr key={user.tgId}>
+                      <td>
+                        <div className="user-cell">
+                          <span className="user-avatar-lbl">🕹️</span>
+                          <div>
+                            <div className="user-cell-name">{user.firstName}</div>
+                            <small className="user-cell-id">ID: {user.tgId}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{user.username ? `@${user.username}` : <span className="no-data">mavjud emas</span>}</td>
+                      <td className="txt-gold font-bold">🪙 {user.coins}</td>
+                      <td className="txt-green font-bold">{user.rating} XP</td>
+                      <td>
+                        <button className="btn btn-table-edit" onClick={() => startEdit(user)}>✏️ Tahrirlash</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {users.length === 0 && <p className="empty-table-msg">Hozircha o'yinchilar bazada mavjud emas.</p>}
+            </div>
+          )}
+        </section>
+      </main>
     </div>
   );
 }
 
-export default AdminPanel;
+export default App;

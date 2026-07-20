@@ -1,370 +1,291 @@
-/* ==========================================
-   1. UMUMIY EKRAN SOZLAMALARI
-========================================== */
-.admin-login-screen,
-.admin-panel-screen {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: #0e1621; /* Telegram dark theme asosiy foni */
-  color: #ffffff;
-  min-height: 100vh;
-  box-sizing: border-box;
+/* Globals */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0b0f19;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #e2e8f0;
 }
 
-/* ==========================================
-   2. ADMIN LOGIN (PIN KOD) EKRANI
-========================================== */
-.admin-login-screen {
+/* 🔐 Login Screen Styles */
+.admin-login-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
+  height: 100vh;
+  background: radial-gradient(circle at center, #1e1b4b 0%, #0b0f19 70%);
 }
 
-.login-box {
-  background: #17212b; /* Telegram ikkinchi darajali foni */
-  border: 1px solid #242f3d;
-  padding: 30px 20px;
-  border-radius: 16px;
+.login-card {
+  background: #111827;
+  border: 1px solid #1f2937;
+  padding: 40px 30px;
+  border-radius: 20px;
   width: 100%;
-  max-width: 340px;
+  max-width: 360px;
   text-align: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
 }
 
-.login-box h2 {
-  margin: 0 0 10px 0;
-  font-size: 22px;
-  color: #2481cc;
+.lock-icon {
+  font-size: 40px;
+  margin-bottom: 15px;
 }
 
-.login-box p {
-  color: #7f8c8d;
-  font-size: 14px;
-  margin-bottom: 20px;
-}
-
-.login-box input {
-  width: 80%;
-  padding: 12px;
-  margin-bottom: 20px;
-  border-radius: 10px;
-  border: 2px solid #242f3d;
-  background: #242f3d;
+.login-card h2 {
+  margin: 0 0 8px 0;
   color: #ffffff;
-  font-size: 22px;
+  font-size: 24px;
+}
+
+.login-card p {
+  color: #9ca3af;
+  font-size: 14px;
+  margin-bottom: 25px;
+}
+
+.login-card input {
+  width: 100%;
+  padding: 14px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 2px solid #374151;
+  background: #1f2937;
+  color: #fff;
+  font-size: 24px;
   text-align: center;
-  letter-spacing: 8px;
+  letter-spacing: 6px;
   outline: none;
-  transition: border-color 0.2s;
+  margin-bottom: 20px;
 }
 
-.login-box input:focus {
-  border-color: #2481cc;
+.login-card input:focus {
+  border-color: #6366f1;
 }
 
-/* ==========================================
-   3. ADMIN PANEL ASOSIY STRUKTURASI
-========================================== */
-.admin-panel-screen {
-  padding: 16px;
+/* 📊 Main Layout Styles */
+.admin-dashboard {
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
 }
 
-.admin-header {
+.dashboard-nav {
+  background: #111827;
+  border-bottom: 1px solid #1f2937;
+  padding: 16px 32px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #242f3d;
 }
 
-.admin-header h2 {
-  margin: 0;
+.nav-brand {
   font-size: 20px;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.back-btn-small {
-  background: #242f3d;
-  border: none;
-  color: white;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.back-btn-small:active {
-  background: #2b394a;
-}
-
-.logout-btn {
-  background: #e53935;
-  border: none;
-  color: white;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.logout-btn:active {
-  background: #b71c1c;
-}
-
-/* ==========================================
-   4. STATISTIKA BLOKLARI (STATS ROW)
-========================================== */
-.admin-stats-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  flex: 1;
-  background: #17212b;
-  border: 1px solid #242f3d;
-  padding: 14px;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.stat-title {
-  color: #6c7883;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.stat-number {
-  font-size: 18px;
   font-weight: 700;
   color: #ffffff;
 }
 
-/* ==========================================
-   5. O'YINCHILAR JADVALI (TABLE STYLE)
-========================================== */
-.admin-panel-screen h3 {
-  font-size: 16px;
-  color: #6c7883;
-  margin: 10px 0;
-}
-
-.admin-table-container {
-  flex: 1;
-  overflow-y: auto;
-  background: #17212b;
-  border-radius: 12px;
-  border: 1px solid #242f3d;
-  max-height: calc(100vh - 220px); /* Ekran o'lchamiga qarab skroll hosil qilish */
-}
-
-.admin-table {
+.dashboard-content {
+  padding: 32px;
+  max-width: 1200px;
   width: 100%;
-  border-collapse: collapse;
-  text-align: left;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Analytics Cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.card-stat {
+  background: #111827;
+  border: 1px solid #1f2937;
+  padding: 24px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.stat-icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.bg-blue { background: rgba(59, 130, 246, 0.15); }
+.bg-gold { background: rgba(234, 179, 8, 0.15); }
+
+.stat-info h3 {
+  margin: 0;
+  font-size: 24px;
+  color: #fff;
+}
+
+.stat-info p {
+  margin: 4px 0 0 0;
+  color: #9ca3af;
   font-size: 14px;
 }
 
-.admin-table th {
-  background: #202b36;
-  color: #7f8c8d;
-  font-weight: 600;
-  padding: 12px;
-  position: sticky; /* Skroll bo'lganda sarlavha qotib turadi */
-  top: 0;
-  z-index: 10;
-  border-bottom: 2px solid #242f3d;
-}
-
-.admin-table td {
-  padding: 12px;
-  border-bottom: 1px solid #242f3d;
-  vertical-align: middle;
-}
-
-.admin-table tr:last-child td {
-  border-bottom: none;
-}
-
-/* Jadval ichidagi elementlar formatlash */
-.table-user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.t-name {
-  font-weight: 600;
-  color: #ffffff;
-  max-width: 120px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.t-id {
-  font-size: 11px;
-  color: #6c7883;
-}
-
-.t-coins {
-  font-weight: 600;
-  color: #f1c40f;
-  white-space: nowrap;
-}
-
-.t-xp {
-  font-weight: 600;
-  color: #2ecc71;
-  white-space: nowrap;
-}
-
-/* Tahrirlash tugmasi */
-.btn-edit-small {
-  background: #2481cc;
-  border: none;
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: background 0.1s;
-}
-
-.btn-edit-small:active {
-  background: #1a65a4;
-}
-
-/* ==========================================
-   6. MODAL OYNA (TAHRIRLASH)
-========================================== */
-.admin-modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.85); /* Orqa fonni xiralashtirish */
-  backdrop-filter: blur(3px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.admin-modal {
-  background: #17212b;
-  border: 1px solid #2481cc;
-  padding: 22px;
+/* Table Section Styles */
+.data-table-section {
+  background: #111827;
+  border: 1px solid #1f2937;
   border-radius: 16px;
-  width: 100%;
-  max-width: 320px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  animation: modalFadeIn 0.25s ease-out;
+  padding: 24px;
 }
 
-@keyframes modalFadeIn {
-  from { transform: scale(0.9); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-.admin-modal h3 {
-  margin: 0 0 8px 0;
-  color: #ffffff;
-  font-size: 18px;
-}
-
-.admin-modal p {
-  font-size: 13px;
-  color: #95a5a6;
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
 }
 
-.form-group {
-  margin-bottom: 16px;
+.section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #fff;
+}
+
+.table-responsive {
+  overflow-x: auto;
+}
+
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.custom-table th {
+  padding: 14px 16px;
+  background: #1f2937;
+  color: #9ca3af;
+  font-size: 13px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.custom-table td {
+  padding: 16px;
+  border-bottom: 1px solid #1f2937;
+  font-size: 14px;
+}
+
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar-lbl {
+  font-size: 20px;
+}
+
+.user-cell-name {
+  font-weight: 600;
+  color: #fff;
+}
+
+.user-cell-id {
+  color: #6b7280;
+}
+
+.no-data {
+  color: #4b5563;
+  font-style: italic;
+}
+
+.txt-gold { color: #f59e0b; }
+.txt-green { color: #10b981; }
+.font-bold { font-weight: 600; }
+
+/* Buttons System */
+.btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-login { width: 100%; background: #4f46e5; color: #fff; }
+.btn-login:hover { background: #4338ca; }
+.btn-logout { background: #374151; color: #f3f4f6; }
+.btn-logout:hover { background: #4b5563; }
+.btn-refresh { background: #1e293b; color: #38bdf8; border: 1px solid #334155; }
+.btn-table-edit { background: rgba(79, 70, 229, 0.15); color: #818cf8; }
+.btn-table-edit:hover { background: #4f46e5; color: #fff; }
+
+/* Modal Editor Box */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.modal-box {
+  background: #111827;
+  border: 1px solid #374151;
+  padding: 30px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.modal-box h3 { margin: 0 0 10px 0; color: #fff; }
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #1f2937;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+
+.input-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-bottom: 16px;
 }
 
-.form-group label {
-  font-size: 12px;
-  color: #6c7883;
-  font-weight: 500;
-}
-
-.form-group input {
+.input-field label { font-size: 12px; color: #9ca3af; }
+.input-field input {
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid #242f3d;
-  background: #242f3d;
-  color: white;
-  font-size: 16px;
+  border: 1px solid #374151;
+  background: #1f2937;
+  color: #fff;
+  font-size: 15px;
   outline: none;
 }
 
-.form-group input:focus {
-  border-color: #2481cc;
-}
-
-/* ==========================================
-   7. TUGMALAR (BUTTONS SYSTEMS)
-========================================== */
-.login-actions, 
 .modal-actions {
   display: flex;
-  gap: 10px;
-  width: 100%;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 24px;
 }
 
-.btn-primary, 
-.btn-secondary {
-  flex: 1;
-  border: none;
-  padding: 12px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.btn-primary {
-  background: #2481cc;
-  color: white;
-}
-
-.btn-primary:active {
-  background: #1a65a4;
-}
-
-.btn-secondary {
-  background: #2b394a;
-  color: #a6b4c2;
-}
-
-.btn-secondary:active {
-  background: #202b36;
-}
-
-/* ==========================================
-   8. YUKLANISH VA DUST STATUSTLARI
-========================================== */
-.loading-text, 
-.no-players {
-  text-align: center;
-  padding: 30px;
-  color: #6c7883;
-  font-size: 14px;
-}
+.btn-cancel { flex: 1; background: #374151; color: #fff; }
+.btn-save { flex: 1; background: #10b981; color: #fff; }
