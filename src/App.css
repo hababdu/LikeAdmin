@@ -1,183 +1,370 @@
-:root {
-    --bg-main: #0f172a;
-    --bg-side: #1e293b;
-    --bg-card: #1e293b;
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
-    --accent: #3b82f6;
-    --gold: #f59e0b;
-    --danger: #ef4444;
-    --border: #334155;
-  }
-  
-  body {
-    margin: 0;
-    background-color: var(--bg-main);
-    color: var(--text-main);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  }
-  
-  .admin-app {
-    display: flex;
-    min-height: 100vh;
-  }
-  
-  /* Sidebar */
-  .sidebar {
-    width: 260px;
-    background: var(--bg-side);
-    border-right: 1px solid var(--border);
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 32px;
-  }
-  
-  .logo-zone {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .logo-zone h2 { margin: 0; font-size: 20px; }
-  .logo-zone span { color: var(--text-muted); font-size: 12px; }
-  .avatar-crown { font-size: 24px; }
-  
-  .side-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    background: #334155;
-  }
-  
-  .refresh-btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-main);
-    padding: 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    justify-content: center;
-  }
-  
-  .refresh-btn:hover { background: #334155; }
-  
-  /* Main Content */
-  .main-content {
-    flex: 1;
-    padding: 40px;
-    overflow-y: auto;
-  }
-  
-  .main-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 32px;
-  }
-  
-  .main-header h1 { margin: 0; font-size: 28px; }
-  .connection-status { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-muted); }
-  .indicator { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
-  
-  /* Grid Layout */
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-  }
-  
-  .stats-container {
-    grid-column: span 2;
-    display: flex;
-    gap: 24px;
-  }
-  
-  .stat-box {
-    flex: 1;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  
-  .icon-wrap { padding: 12px; border-radius: 10px; }
-  .icon-wrap.blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-  .icon-wrap.gold { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
-  
-  .stat-box h3 { margin: 0; font-size: 14px; color: var(--text-muted); }
-  .stat-box p { margin: 4px 0 0 0; font-size: 24px; font-weight: bold; }
-  .coin-text { color: var(--gold); }
-  
-  /* Form & Table Cards */
-  .form-card, .table-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 24px;
-  }
-  
-  .table-card { grid-column: span 2; }
-  
-  .crud-form {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-  
-  .input-field { display: flex; flex-direction: column; gap: 6px; }
-  .input-field label { font-size: 13px; color: var(--text-muted); }
-  .input-field input {
-    background: var(--bg-main);
-    border: 1px solid var(--border);
-    padding: 10px;
-    color: white;
-    border-radius: 8px;
-    outline: none;
-  }
-  
-  .form-actions { display: flex; gap: 12px; margin-top: 10px; }
-  .btn-save { background: var(--accent); border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; flex: 1; }
-  .btn-cancel { background: #475569; border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; }
-  
-  /* Table Section */
-  .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-  .search-box { display: flex; align-items: center; gap: 8px; background: var(--bg-main); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; width: 300px; }
-  .search-box input { background: none; border: none; color: white; outline: none; width: 100%; }
-  
-  .scroll-table { overflow-x: auto; max-height: 400px; }
-  .custom-table { width: 100%; border-collapse: collapse; text-align: left; }
-  .custom-table th, .custom-table td { padding: 14px; border-bottom: 1px solid var(--border); }
-  .custom-table th { background: var(--bg-main); color: var(--text-muted); font-size: 13px; }
-  
-  .user-profile-cell { display: flex; align-items: center; gap: 10px; }
-  .table-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
-  .table-no-avatar { width: 32px; height: 32px; border-radius: 50%; background: #475569; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-  
-  .gold-text { color: var(--gold); font-weight: bold; }
-  .xp-text { color: #10b981; }
-  .no-data { color: #64748b; font-style: italic; }
-  
-  .action-buttons { display: flex; gap: 8px; }
-  .btn-edit, .btn-delete { border: none; padding: 6px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; color: white; }
-  .btn-edit { background: #475569; }
-  .btn-delete { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
-  
-  .loading-state { text-align: center; padding: 60px; color: var(--text-muted); }
-  .spinner { border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid var(--accent); border-radius: 50%; width: 36px; height: 36px; animation: spin 1s linear infinite; margin: 0 auto 16px auto; }
-  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+/* ==========================================
+   1. UMUMIY EKRAN SOZLAMALARI
+========================================== */
+.admin-login-screen,
+.admin-panel-screen {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #0e1621; /* Telegram dark theme asosiy foni */
+  color: #ffffff;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* ==========================================
+   2. ADMIN LOGIN (PIN KOD) EKRANI
+========================================== */
+.admin-login-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.login-box {
+  background: #17212b; /* Telegram ikkinchi darajali foni */
+  border: 1px solid #242f3d;
+  padding: 30px 20px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.login-box h2 {
+  margin: 0 0 10px 0;
+  font-size: 22px;
+  color: #2481cc;
+}
+
+.login-box p {
+  color: #7f8c8d;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.login-box input {
+  width: 80%;
+  padding: 12px;
+  margin-bottom: 20px;
+  border-radius: 10px;
+  border: 2px solid #242f3d;
+  background: #242f3d;
+  color: #ffffff;
+  font-size: 22px;
+  text-align: center;
+  letter-spacing: 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.login-box input:focus {
+  border-color: #2481cc;
+}
+
+/* ==========================================
+   3. ADMIN PANEL ASOSIY STRUKTURASI
+========================================== */
+.admin-panel-screen {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #242f3d;
+}
+
+.admin-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.back-btn-small {
+  background: #242f3d;
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.back-btn-small:active {
+  background: #2b394a;
+}
+
+.logout-btn {
+  background: #e53935;
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.logout-btn:active {
+  background: #b71c1c;
+}
+
+/* ==========================================
+   4. STATISTIKA BLOKLARI (STATS ROW)
+========================================== */
+.admin-stats-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  flex: 1;
+  background: #17212b;
+  border: 1px solid #242f3d;
+  padding: 14px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-title {
+  color: #6c7883;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-number {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* ==========================================
+   5. O'YINCHILAR JADVALI (TABLE STYLE)
+========================================== */
+.admin-panel-screen h3 {
+  font-size: 16px;
+  color: #6c7883;
+  margin: 10px 0;
+}
+
+.admin-table-container {
+  flex: 1;
+  overflow-y: auto;
+  background: #17212b;
+  border-radius: 12px;
+  border: 1px solid #242f3d;
+  max-height: calc(100vh - 220px); /* Ekran o'lchamiga qarab skroll hosil qilish */
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+
+.admin-table th {
+  background: #202b36;
+  color: #7f8c8d;
+  font-weight: 600;
+  padding: 12px;
+  position: sticky; /* Skroll bo'lganda sarlavha qotib turadi */
+  top: 0;
+  z-index: 10;
+  border-bottom: 2px solid #242f3d;
+}
+
+.admin-table td {
+  padding: 12px;
+  border-bottom: 1px solid #242f3d;
+  vertical-align: middle;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Jadval ichidagi elementlar formatlash */
+.table-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.t-name {
+  font-weight: 600;
+  color: #ffffff;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.t-id {
+  font-size: 11px;
+  color: #6c7883;
+}
+
+.t-coins {
+  font-weight: 600;
+  color: #f1c40f;
+  white-space: nowrap;
+}
+
+.t-xp {
+  font-weight: 600;
+  color: #2ecc71;
+  white-space: nowrap;
+}
+
+/* Tahrirlash tugmasi */
+.btn-edit-small {
+  background: #2481cc;
+  border: none;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.1s;
+}
+
+.btn-edit-small:active {
+  background: #1a65a4;
+}
+
+/* ==========================================
+   6. MODAL OYNA (TAHRIRLASH)
+========================================== */
+.admin-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.85); /* Orqa fonni xiralashtirish */
+  backdrop-filter: blur(3px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.admin-modal {
+  background: #17212b;
+  border: 1px solid #2481cc;
+  padding: 22px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 320px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: modalFadeIn 0.25s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.admin-modal h3 {
+  margin: 0 0 8px 0;
+  color: #ffffff;
+  font-size: 18px;
+}
+
+.admin-modal p {
+  font-size: 13px;
+  color: #95a5a6;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 12px;
+  color: #6c7883;
+  font-weight: 500;
+}
+
+.form-group input {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #242f3d;
+  background: #242f3d;
+  color: white;
+  font-size: 16px;
+  outline: none;
+}
+
+.form-group input:focus {
+  border-color: #2481cc;
+}
+
+/* ==========================================
+   7. TUGMALAR (BUTTONS SYSTEMS)
+========================================== */
+.login-actions, 
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.btn-primary, 
+.btn-secondary {
+  flex: 1;
+  border: none;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-primary {
+  background: #2481cc;
+  color: white;
+}
+
+.btn-primary:active {
+  background: #1a65a4;
+}
+
+.btn-secondary {
+  background: #2b394a;
+  color: #a6b4c2;
+}
+
+.btn-secondary:active {
+  background: #202b36;
+}
+
+/* ==========================================
+   8. YUKLANISH VA DUST STATUSTLARI
+========================================== */
+.loading-text, 
+.no-players {
+  text-align: center;
+  padding: 30px;
+  color: #6c7883;
+  font-size: 14px;
+}
