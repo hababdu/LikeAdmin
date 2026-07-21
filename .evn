@@ -1,0 +1,6 @@
+PORT=10000
+NODE_ENV=production
+MONGODB_URI=mongodb+srv://habibullox:Habibullox2003@cluster0.mku75qs.mongodb.net/like_duel?retryWrites=true&w=majority
+ADMIN_TOKEN=admin-secret-key
+WEB_APP_URL=https://telegram-mini-app-gsny.onrender.com
+ALLOWED_ORIGINS=https://telegram-mini-app-gsny.onrender.com,https://like-admin-m9j1n851q-habibulloabdumutallibovs-projects.vercel.app
