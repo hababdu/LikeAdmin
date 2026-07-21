@@ -1,717 +1,1042 @@
-import express from 'express';
-import http from 'http';
-import { io } from 'socket.io-client'; // ✅ TO'G'RI! Bu frontend uchun
-import mongoose from 'mongoose';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import rateLimit from 'express-rate-limit';
+import React, { useState, useEffect, useCallback } from 'react';
+import './App.css';
 
-dotenv.config();
+// ============================================================
+// ADMIN PANEL - TO'LIQ LOYIHA
+// ============================================================
 
-const app = express();
-const server = http.createServer(app);
+function App() {
+  // ======================
+  // STATE'LAR
+  // ======================
+  const [adminKey, setAdminKey] = useState(localStorage.getItem('admin_token') || '');
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('rating');
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [editingUser, setEditingUser] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
-// ======================
-// ENVIRONMENT VARIABLES
-// ======================
-const {
-  PORT = 10000,
-  NODE_ENV = 'production',
-  MONGODB_URI,
-  ADMIN_TOKEN = 'admin-secret-key',
-  WEB_APP_URL = 'https://telegram-mini-app-gsny.onrender.com'
-} = process.env;
+  // ======================
+  // KONSTANTALAR
+  // ======================
+  const API_URL = import.meta.env?.VITE_API_URL || 'https://telegram-bot-server-2-matj.onrender.com';
+  const ADMIN_TOKEN = import.meta.env?.VITE_ADMIN_TOKEN || 'admin-secret-key';
+  const LIMIT = 20;
 
-// ======================
-// CORS SOZLAMALARI (MUHIM!)
-// ======================
-const allowedOrigins = [
-  'https://telegram-mini-app-gsny.onrender.com',
-  'https://like-admin-m9j1n851q-habibulloabdumutallibovs-projects.vercel.app',
-  'https://like-admin-*.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'https://telegram-bot-server-2-matj.onrender.com'
-];
-
-// CORS middleware - BARCHA SOROVLARDAN OLDIN
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // Allow all origins in development, specific in production
-  if (NODE_ENV === 'development') {
-    res.header('Access-Control-Allow-Origin', '*');
-  } else if (origin) {
-    // Check if origin is allowed
-    const isAllowed = allowedOrigins.some(allowed => {
-      if (allowed.includes('*')) {
-        const pattern = allowed.replace(/\*/g, '.*');
-        return new RegExp(`^${pattern}$`).test(origin);
-      }
-      return allowed === origin;
-    });
-    
-    if (isAllowed) {
-      res.header('Access-Control-Allow-Origin', origin);
-    }
-  }
-  
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, x-admin-key, X-Requested-With, x-telegram-init-data');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Max-Age', '86400'); // 24 hours
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  
-  next();
-});
-
-// ======================
-// MIDDLEWARE
-// ======================
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { success: false, message: "Juda ko'p so'rov yubordingiz. Biroz kutib turing." }
-});
-app.use('/api/', limiter);
-
-// ======================
-// SOCKET.IO
-// ======================
-const io = new Server(server, {
-  cors: {
-    origin: NODE_ENV === 'production' 
-      ? allowedOrigins
-      : '*',
-    methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "x-admin-key"]
-  },
-  transports: ['websocket', 'polling'],
-  pingTimeout: 60000,
-  pingInterval: 25000,
-});
-
-let searchQueue = [];
-let activeRooms = {};
-let onlineUsers = new Map();
-
-// ======================
-// MONGODB ULAGI
-// ======================
-const connectDB = async () => {
-  try {
-    await mongoose.connect(MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      family: 4,
-      maxPoolSize: 10,
-      minPoolSize: 2,
-    });
-    console.log('💾 MongoDB muvaffaqiyatli ulandi.');
-  } catch (err) {
-    console.error('🔴 MongoDB xatolik:', err.message);
-    setTimeout(connectDB, 5000);
-  }
-};
-
-connectDB();
-
-mongoose.connection.on('disconnected', () => {
-  console.log('🟡 MongoDB uzildi. Qayta ulanish...');
-  setTimeout(connectDB, 5000);
-});
-
-// ======================
-// USER SCHEMA
-// ======================
-const userSchema = new mongoose.Schema({
-  tgId: { type: String, required: true, unique: true, index: true },
-  username: { type: String, default: '' },
-  firstName: { type: String, default: "O'yinchi" },
-  lastName: { type: String, default: '' },
-  photoUrl: { type: String, default: '' },
-  coins: { type: Number, default: 100, min: 0 },
-  rating: { type: Number, default: 100, min: 0 },
-  refParent: { type: String, default: null },
-  isRefRewarded: { type: Boolean, default: false },
-  lastLogin: { type: Date, default: Date.now },
-  totalGames: { type: Number, default: 0 },
-  wins: { type: Number, default: 0 },
-  losses: { type: Number, default: 0 },
-  draws: { type: Number, default: 0 },
-  lastGameAt: { type: Date },
-  isOnline: { type: Boolean, default: false },
-  deviceInfo: { type: String, default: '' }
-}, { timestamps: true });
-
-const User = mongoose.model('User', userSchema);
-
-// ======================
-// HELPER FUNCTIONS
-// ======================
-function determineWinner(choice1, choice2) {
-  if (choice1 === choice2) return 'draw';
-  if (
-    (choice1 === 'rock' && choice2 === 'scissors') ||
-    (choice1 === 'paper' && choice2 === 'rock') ||
-    (choice1 === 'scissors' && choice2 === 'paper')
-  ) return 'player1';
-  return 'player2';
-}
-
-async function evaluateRound(roomId) {
-  const room = activeRooms[roomId];
-  if (!room) return;
-
-  const [p1, p2] = room.players;
-  const c1 = room.choices[p1.socketId] || 'timeout';
-  const c2 = room.choices[p2.socketId] || 'timeout';
-
-  let result1 = 'draw', result2 = 'draw';
-  let coinChange1 = 0, coinChange2 = 0;
-  let xpChange1 = 0, xpChange2 = 0;
-
-  if (c1 === 'timeout' && c2 === 'timeout') {
-    // Hech narsa o'zgarmaydi
-  } else if (c1 === 'timeout') {
-    result1 = 'lose'; result2 = 'win';
-    coinChange1 = -room.stake; coinChange2 = room.stake;
-    xpChange1 = -10; xpChange2 = 15;
-  } else if (c2 === 'timeout') {
-    result1 = 'win'; result2 = 'lose';
-    coinChange1 = room.stake; coinChange2 = -room.stake;
-    xpChange1 = 15; xpChange2 = -10;
-  } else {
-    const winner = determineWinner(c1, c2);
-    if (winner === 'player1') {
-      result1 = 'win'; result2 = 'lose';
-      coinChange1 = room.stake; coinChange2 = -room.stake;
-      xpChange1 = 15; xpChange2 = -10;
-    } else if (winner === 'player2') {
-      result1 = 'lose'; result2 = 'win';
-      coinChange1 = -room.stake; coinChange2 = room.stake;
-      xpChange1 = -10; xpChange2 = 15;
-    }
-  }
-
-  try {
-    const [user1, user2] = await Promise.all([
-      User.findOne({ tgId: p1.tgId }),
-      User.findOne({ tgId: p2.tgId })
-    ]);
-
-    if (user1) {
-      user1.coins = Math.max(0, user1.coins + coinChange1);
-      user1.rating = Math.max(0, user1.rating + xpChange1);
-      user1.totalGames = (user1.totalGames || 0) + 1;
-      user1.lastGameAt = new Date();
-      if (result1 === 'win') user1.wins = (user1.wins || 0) + 1;
-      else if (result1 === 'lose') user1.losses = (user1.losses || 0) + 1;
-      else user1.draws = (user1.draws || 0) + 1;
-      await user1.save();
-    }
-
-    if (user2) {
-      user2.coins = Math.max(0, user2.coins + coinChange2);
-      user2.rating = Math.max(0, user2.rating + xpChange2);
-      user2.totalGames = (user2.totalGames || 0) + 1;
-      user2.lastGameAt = new Date();
-      if (result2 === 'win') user2.wins = (user2.wins || 0) + 1;
-      else if (result2 === 'lose') user2.losses = (user2.losses || 0) + 1;
-      else user2.draws = (user2.draws || 0) + 1;
-      await user2.save();
-    }
-
-    io.to(p1.socketId).emit('round_result', {
-      myChoice: c1, opponentChoice: c2, result: result1,
-      rewardCoins: coinChange1, rewardXP: xpChange1
-    });
-
-    io.to(p2.socketId).emit('round_result', {
-      myChoice: c2, opponentChoice: c1, result: result2,
-      rewardCoins: coinChange2, rewardXP: xpChange2
-    });
-
-  } catch (err) {
-    console.error("Balans yangilashda xatolik:", err);
-  }
-
-  delete activeRooms[roomId];
-}
-
-function startRoomTimer(roomId) {
-  let timeLeft = 30;
-  const room = activeRooms[roomId];
-  if (!room) return;
-
-  room.timerInterval = setInterval(() => {
-    timeLeft--;
-    io.to(roomId).emit('timer_tick', timeLeft);
-
-    if (timeLeft <= 0) {
-      clearInterval(room.timerInterval);
-      evaluateRound(roomId);
-    }
-  }, 1000);
-}
-
-// ======================
-// ADMIN AUTH
-// ======================
-const adminAuth = (req, res, next) => {
-  const adminKey = req.headers['x-admin-key'] || req.headers['authorization'];
-  if (!adminKey || adminKey !== ADMIN_TOKEN) {
-    return res.status(403).json({ 
-      success: false, 
-      message: "Admin ruxsati yo'q"
-    });
-  }
-  next();
-};
-
-// ======================
-// API ROUTES
-// ======================
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date(),
-    uptime: process.uptime()
+  // ======================
+  // HEADER FUNKSIYALARI
+  // ======================
+  const getHeaders = () => ({
+    'Content-Type': 'application/json',
+    'x-admin-key': adminKey,
+    'Authorization': `Bearer ${adminKey}`
   });
-});
 
-// AUTH
-app.post('/api/user/auth', async (req, res) => {
-  const { tgId, username, firstName, lastName, photoUrl, refParent } = req.body;
+  // ======================
+  // API FUNKSIYALARI
+  // ======================
 
-  try {
-    let user = await User.findOne({ tgId });
-
-    if (!user) {
-      user = new User({
-        tgId,
-        username: username || '',
-        firstName: firstName || "O'yinchi",
-        lastName: lastName || '',
-        photoUrl: photoUrl || '',
-        coins: 100,
-        rating: 100,
-        refParent: refParent && refParent !== tgId ? refParent : null,
-      });
-
-      if (refParent && refParent !== tgId) {
-        const parent = await User.findOne({ tgId: refParent });
-        if (parent) {
-          parent.coins += 100;
-          await parent.save();
-          user.coins += 100;
-          user.isRefRewarded = true;
-          io.emit(`update_${refParent}`, { 
-            type: 'REF_BONUS', 
-            coins: parent.coins
-          });
-        }
-      }
-      await user.save();
-    } else {
-      user.username = username || user.username;
-      user.firstName = firstName || user.firstName;
-      user.lastName = lastName || user.lastName;
-      user.photoUrl = photoUrl || user.photoUrl;
-      user.lastLogin = new Date();
-      user.isOnline = true;
-      await user.save();
-    }
-
-    res.status(200).json({ success: true, user });
-  } catch (error) {
-    console.error('Auth xatoligi:', error);
-    res.status(500).json({ success: false, message: "Avtorizatsiya xatoligi" });
-  }
-});
-
-// LEADERBOARD
-app.get('/api/user/leaderboard', async (req, res) => {
-  try {
-    const leaders = await User.find()
-      .sort({ rating: -1, coins: -1 })
-      .limit(50)
-      .select('tgId firstName username coins rating photoUrl totalGames wins');
-
-    res.status(200).json({ success: true, leaders });
-  } catch (error) {
-    console.error('Leaderboard xatoligi:', error);
-    res.status(500).json({ success: false, message: "Leaderboard xatoligi" });
-  }
-});
-
-// BUY CHAT LINK
-app.post('/api/user/buy-chat-link', async (req, res) => {
-  const { tgId } = req.body;
-  try {
-    const user = await User.findOne({ tgId });
-    if (!user) return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
-    if (user.coins < 10) return res.status(400).json({ success: false, message: "Yetarli tanga yo'q (10 ta kerak)" });
-
-    user.coins -= 10;
-    await user.save();
-
-    res.status(200).json({ success: true, coins: user.coins });
-  } catch (error) {
-    console.error('Xarid xatoligi:', error);
-    res.status(500).json({ success: false, message: "Xarid amalga oshmadi" });
-  }
-});
-
-// USER STATS
-app.get('/api/user/:tgId/stats', async (req, res) => {
-  try {
-    const user = await User.findOne({ tgId: req.params.tgId });
-    if (!user) return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
-    
-    res.status(200).json({ 
-      success: true, 
-      stats: {
-        coins: user.coins,
-        rating: user.rating,
-        totalGames: user.totalGames,
-        wins: user.wins,
-        losses: user.losses,
-        draws: user.draws,
-        winRate: user.totalGames > 0 ? Math.round((user.wins / user.totalGames) * 100) : 0
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Statistika xatoligi" });
-  }
-});
-
-// ======================
-// ADMIN ROUTES
-// ======================
-
-// Stats
-app.get('/api/admin/stats', adminAuth, async (req, res) => {
-  try {
-    const [
-      totalUsers,
-      onlineUsersCount,
-      totalCoins,
-      totalRating,
-      totalGames,
-      top10
-    ] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ isOnline: true }),
-      User.aggregate([{ $group: { _id: null, total: { $sum: "$coins" } } }]),
-      User.aggregate([{ $group: { _id: null, total: { $sum: "$rating" } } }]),
-      User.aggregate([{ $group: { _id: null, total: { $sum: "$totalGames" } } }]),
-      User.find().sort({ rating: -1, coins: -1 }).limit(10).select('firstName username coins rating totalGames wins')
-    ]);
-
-    res.json({
-      success: true,
-      data: {
-        totalUsers,
-        onlineUsers: onlineUsersCount,
-        totalCoins: totalCoins[0]?.total || 0,
-        totalRating: totalRating[0]?.total || 0,
-        totalGames: totalGames[0]?.total || 0,
-        top10,
-        activeRooms: Object.keys(activeRooms).length,
-        searchQueue: searchQueue.length,
-        timestamp: new Date()
-      }
-    });
-  } catch (err) {
-    console.error('Admin stats xatoligi:', err);
-    res.status(500).json({ success: false, message: "Statistika xatoligi" });
-  }
-});
-
-// Users list
-app.get('/api/admin/users', adminAuth, async (req, res) => {
-  try {
-    const { search = '', page = 1, limit = 20, sortBy = 'rating' } = req.query;
-    
-    const query = search ? {
-      $or: [
-        { tgId: { $regex: search, $options: 'i' } },
-        { username: { $regex: search, $options: 'i' } },
-        { firstName: { $regex: search, $options: 'i' } }
-      ]
-    } : {};
-
-    const sortOptions = {
-      rating: { rating: -1, coins: -1 },
-      coins: { coins: -1, rating: -1 },
-      games: { totalGames: -1, rating: -1 },
-      newest: { createdAt: -1 }
-    };
-
-    const users = await User.find(query)
-      .sort(sortOptions[sortBy] || sortOptions.rating)
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .limit(parseInt(limit))
-      .select('-__v');
-
-    const total = await User.countDocuments(query);
-
-    res.json({ 
-      success: true, 
-      users, 
-      total, 
-      page: parseInt(page),
-      totalPages: Math.ceil(total / parseInt(limit))
-    });
-  } catch (err) {
-    console.error('Admin users xatoligi:', err);
-    res.status(500).json({ success: false, message: "Foydalanuvchilarni yuklashda xatolik" });
-  }
-});
-
-// Get single user
-app.get('/api/admin/users/:id', adminAuth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
-    res.json({ success: true, user });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Xatolik" });
-  }
-});
-
-// Update user
-app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
-  try {
-    const { coins, rating, firstName, username, photoUrl } = req.body;
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { 
-        coins: Math.max(0, coins || 0), 
-        rating: Math.max(0, rating || 0),
-        firstName, 
-        username, 
-        photoUrl 
-      },
-      { new: true, runValidators: true }
-    );
-    if (!user) return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
-
-    res.json({ success: true, user, message: "Muvaffaqiyatli yangilandi" });
-  } catch (err) {
-    console.error('Update xatoligi:', err);
-    res.status(500).json({ success: false, message: "Tahrirlashda xatolik" });
-  }
-});
-
-// Delete user
-app.delete('/api/admin/users/:id', adminAuth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
-    
-    await User.findByIdAndDelete(req.params.id);
-    res.json({ success: true, message: "Foydalanuvchi o'chirildi" });
-  } catch (err) {
-    console.error('Delete xatoligi:', err);
-    res.status(500).json({ success: false, message: "O'chirishda xatolik" });
-  }
-});
-
-// Update coins
-app.post('/api/admin/users/:id/coins', adminAuth, async (req, res) => {
-  const { amount } = req.body;
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
-    
-    const newCoins = Math.max(0, user.coins + (amount || 0));
-    user.coins = newCoins;
-    await user.save();
-    
-    res.json({ success: true, user });
-  } catch (err) {
-    console.error('Coin update xatoligi:', err);
-    res.status(500).json({ success: false, message: "Coin o'zgartirishda xatolik" });
-  }
-});
-
-// ======================
-// SOCKET.IO EVENTS
-// ======================
-
-io.on('connection', (socket) => {
-  console.log(`🔌 Yangi ulanish: ${socket.id}`);
-
-  socket.on('user_connect', async (data) => {
-    const { tgId, firstName } = data;
+  // 1. STATISTIKA
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      await User.findOneAndUpdate(
-        { tgId },
-        { isOnline: true, lastLogin: new Date() }
+      const res = await fetch(`${API_URL}/api/admin/stats`, {
+        headers: getHeaders()
+      });
+      
+      if (res.status === 403) {
+        setIsAuthorized(false);
+        setError('Admin ruxsati yo\'q. Kalitni tekshiring.');
+        localStorage.removeItem('admin_token');
+        setLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        setStats(data.data);
+      } else {
+        setError(data.message || 'Statistika yuklashda xatolik');
+      }
+    } catch (err) {
+      console.error('Stats error:', err);
+      setError('Serverga ulanishda xatolik');
+    } finally {
+      setLoading(false);
+    }
+  }, [adminKey, API_URL]);
+
+  // 2. FOYDALANUVCHILAR
+  const fetchUsers = useCallback(async (page = currentPage, searchTerm = search, sort = sortBy) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/admin/users?page=${page}&limit=${LIMIT}&search=${encodeURIComponent(searchTerm)}&sortBy=${sort}`,
+        { headers: getHeaders() }
       );
       
-      onlineUsers.set(tgId, {
-        socketId: socket.id,
-        firstName,
-        connectedAt: new Date()
-      });
+      if (res.status === 403) {
+        setIsAuthorized(false);
+        setError('Admin ruxsati yo\'q');
+        localStorage.removeItem('admin_token');
+        setLoading(false);
+        return;
+      }
 
-      io.emit('user_status', {
-        tgId,
-        status: 'online',
-        firstName
-      });
-    } catch (error) {
-      console.error('User connect error:', error);
+      const data = await res.json();
+      if (data.success) {
+        setUsers(data.users || []);
+        setTotalUsers(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+        setCurrentPage(page);
+      } else {
+        setError(data.message || 'Foydalanuvchilarni yuklashda xatolik');
+      }
+    } catch (err) {
+      console.error('Users error:', err);
+      setError('Serverga ulanishda xatolik');
+    } finally {
+      setLoading(false);
     }
-  });
+  }, [adminKey, API_URL, currentPage, search, sortBy]);
 
-  socket.on('find_match', ({ player, stake = 10 }) => {
-    searchQueue = searchQueue.filter(p => io.sockets.sockets.has(p.socketId));
-
-    const newPlayer = {
-      socketId: socket.id,
-      tgId: player.tgId,
-      name: player.firstName || player.name || "O'yinchi",
-      username: player.username || '',
-      rating: player.rating || 100,
-      stake: Number(stake),
-      joinedAt: new Date()
-    };
-
-    const opponentIndex = searchQueue.findIndex(p => 
-      p.stake === newPlayer.stake && 
-      p.tgId !== newPlayer.tgId &&
-      p.socketId !== socket.id
-    );
-
-    if (opponentIndex !== -1) {
-      const opponent = searchQueue.splice(opponentIndex, 1)[0];
-      const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-
-      socket.join(roomId);
-      const oppSocket = io.sockets.sockets.get(opponent.socketId);
-      if (oppSocket) oppSocket.join(roomId);
-
-      activeRooms[roomId] = {
-        roomId,
-        players: [newPlayer, opponent],
-        choices: {},
-        stake: newPlayer.stake,
-        timerInterval: null,
-        createdAt: new Date()
-      };
-
-      socket.emit('match_found', { 
-        roomId, 
-        opponent: { 
-          tgId: opponent.tgId, 
-          name: opponent.name, 
-          rating: opponent.rating,
-          username: opponent.username 
-        }, 
-        stake: newPlayer.stake 
+  // 3. FOYDALANUVCHI YANGILASH
+  const updateUser = async (id, data) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
       });
       
-      io.to(opponent.socketId).emit('match_found', { 
-        roomId, 
-        opponent: { 
-          tgId: newPlayer.tgId, 
-          name: newPlayer.name, 
-          rating: newPlayer.rating,
-          username: newPlayer.username 
-        }, 
-        stake: newPlayer.stake 
-      });
+      const result = await res.json();
+      if (result.success) {
+        setSuccessMessage('✅ Foydalanuvchi muvaffaqiyatli yangilandi!');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        await fetchUsers();
+        await fetchStats();
+        setShowEditModal(false);
+        return true;
+      } else {
+        setError(result.message || 'Yangilashda xatolik');
+        return false;
+      }
+    } catch (err) {
+      console.error('Update error:', err);
+      setError('Server xatoligi');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      startRoomTimer(roomId);
+  // 4. COIN QO'SHISH
+  const updateCoins = async (id, amount) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${id}/coins`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ amount })
+      });
+      
+      const result = await res.json();
+      if (result.success) {
+        setSuccessMessage(`🪙 ${amount > 0 ? '+' : ''}${amount} tanga ${amount > 0 ? 'qo\'shildi' : 'ayirildi'}`);
+        setTimeout(() => setSuccessMessage(null), 3000);
+        await fetchUsers();
+        await fetchStats();
+      } else {
+        setError(result.message || 'Coin o\'zgartirishda xatolik');
+      }
+    } catch (err) {
+      console.error('Coins error:', err);
+      setError('Server xatoligi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 5. FOYDALANUVCHI O'CHIRISH
+  const deleteUser = async (id) => {
+    if (!window.confirm('⚠️ Bu amal qaytarib bo\'lmaydi! Foydalanuvchini o\'chirmoqchimisiz?')) return;
+    
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      
+      const result = await res.json();
+      if (result.success) {
+        setSuccessMessage('🗑️ Foydalanuvchi o\'chirildi');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        await fetchUsers();
+        await fetchStats();
+      } else {
+        setError(result.message || 'O\'chirishda xatolik');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      setError('Server xatoligi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 6. KO'P O'CHIRISH
+  const bulkDelete = async () => {
+    if (selectedUsers.length === 0) {
+      setError('Hech qanday foydalanuvchi tanlanmagan');
+      return;
+    }
+    
+    if (!window.confirm(`⚠️ ${selectedUsers.length} ta foydalanuvchini o'chirmoqchimisiz?`)) return;
+    
+    setLoading(true);
+    let deleted = 0;
+    for (const id of selectedUsers) {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/users/${id}`, {
+          method: 'DELETE',
+          headers: getHeaders()
+        });
+        const result = await res.json();
+        if (result.success) deleted++;
+      } catch (err) {
+        console.error('Bulk delete error:', err);
+      }
+    }
+    
+    setSuccessMessage(`✅ ${deleted} ta foydalanuvchi o'chirildi`);
+    setTimeout(() => setSuccessMessage(null), 3000);
+    setSelectedUsers([]);
+    await fetchUsers();
+    await fetchStats();
+    setLoading(false);
+  };
+
+  // 7. EKSPORT
+  const exportUsers = async () => {
+    if (users.length === 0) {
+      setError('Eksport qilish uchun foydalanuvchilar yo\'q');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const headers = ['ID', 'Telegram ID', 'Ism', 'Username', 'Tangalar', 'Reyting', 'O\'yinlar', 'G\'alabalar'];
+      const csvData = users.map(u => [
+        u._id,
+        u.tgId,
+        u.firstName,
+        u.username || '',
+        u.coins,
+        u.rating,
+        u.totalGames || 0,
+        u.wins || 0
+      ]);
+      
+      const csvContent = [headers.join(','), ...csvData.map(row => row.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `users_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setSuccessMessage('📊 Foydalanuvchilar eksport qilindi');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error('Export error:', err);
+      setError('Eksportda xatolik');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ======================
+  // EVENT HANDLER'LAR
+  // ======================
+
+  // LOGIN
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (adminKey.trim()) {
+      if (adminKey === ADMIN_TOKEN) {
+        localStorage.setItem('admin_token', adminKey);
+        setIsAuthorized(true);
+        setError(null);
+        fetchStats();
+        fetchUsers();
+      } else {
+        setError('❌ Noto\'g\'ri admin kaliti!');
+      }
+    }
+  };
+
+  // QIDIRUV
+  const handleSearch = (e) => {
+    const value = e.target.value;
+    setSearch(value);
+    setCurrentPage(1);
+    fetchUsers(1, value, sortBy);
+  };
+
+  // SAHIFA O'ZGARISHI
+  const handlePageChange = (page) => {
+    fetchUsers(page, search, sortBy);
+  };
+
+  // SORT O'ZGARISHI
+  const handleSortChange = (e) => {
+    const value = e.target.value;
+    setSortBy(value);
+    setCurrentPage(1);
+    fetchUsers(1, search, value);
+  };
+
+  // TANLASH
+  const toggleSelectUser = (id) => {
+    setSelectedUsers(prev => 
+      prev.includes(id) 
+        ? prev.filter(uid => uid !== id)
+        : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUsers.length === users.length && users.length > 0) {
+      setSelectedUsers([]);
     } else {
-      searchQueue.push(newPlayer);
-      socket.emit('searching', { stake: newPlayer.stake });
+      setSelectedUsers(users.map(u => u._id));
     }
-  });
+  };
 
-  socket.on('player_choice', ({ roomId, choice }) => {
-    const room = activeRooms[roomId];
-    if (!room) return;
+  // TAHRIRLASH MODAL
+  const openEditModal = (user) => {
+    setEditingUser({ ...user });
+    setShowEditModal(true);
+  };
 
-    room.choices[socket.id] = choice;
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditingUser(null);
+  };
 
-    if (Object.keys(room.choices).length === 2) {
-      if (room.timerInterval) clearInterval(room.timerInterval);
-      evaluateRound(roomId);
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    
+    await updateUser(editingUser._id, {
+      firstName: editingUser.firstName,
+      username: editingUser.username,
+      coins: Number(editingUser.coins),
+      rating: Number(editingUser.rating),
+      photoUrl: editingUser.photoUrl
+    });
+  };
+
+  // CHIQISH
+  const handleLogout = () => {
+    localStorage.removeItem('admin_token');
+    setIsAuthorized(false);
+    setUsers([]);
+    setStats(null);
+    setAdminKey('');
+    setSuccessMessage('👋 Tizimdan chiqdingiz');
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  // FORMAT DATE
+  const formatDate = (date) => {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('uz-UZ', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // ======================
+  // EFFECT'LAR
+  // ======================
+  useEffect(() => {
+    if (adminKey && adminKey === ADMIN_TOKEN) {
+      setIsAuthorized(true);
+      fetchStats();
+      fetchUsers();
     }
-  });
+  }, []);
 
-  socket.on('cancel_search', () => {
-    searchQueue = searchQueue.filter(p => p.socketId !== socket.id);
-  });
+  // ============================================================
+  // LOGIN EKRANI
+  // ============================================================
+  if (!isAuthorized) {
+    return (
+      <div className="login-container">
+        <div className="login-card">
+          <div className="login-header">
+            <div className="login-icon">🔐</div>
+            <h2>Admin Tizimiga Kirish</h2>
+            <p>Like-Duel boshqaruv paneli</p>
+          </div>
+          
+          {error && (
+            <div className="error-message">
+              ⚠️ {error}
+              <button className="close-btn" onClick={() => setError(null)}>✕</button>
+            </div>
+          )}
+          
+          <form onSubmit={handleLogin}>
+            <div className="form-group">
+              <label>🔑 Admin Secret Key</label>
+              <input 
+                type="password" 
+                placeholder="Secret keyni kiriting..." 
+                value={adminKey}
+                onChange={(e) => setAdminKey(e.target.value)}
+                className="admin-input"
+                required
+                autoFocus
+              />
+            </div>
+            
+            <button type="submit" className="btn-primary btn-block">
+              🚪 Kirish
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
-  socket.on('disconnect', () => {
-    searchQueue = searchQueue.filter(p => p.socketId !== socket.id);
+  // ============================================================
+  // ASOSIY PANEL
+  // ============================================================
+  return (
+    <div className="admin-wrapper">
+      {/* HEADER */}
+      <header className="admin-header">
+        <div className="header-left">
+          <h1>🛠️ Like-Duel Admin</h1>
+          <span className="header-badge">v2.0</span>
+        </div>
+        <div className="header-right">
+          <span className="user-badge">👤 Admin</span>
+          <button className="btn-refresh" onClick={() => { fetchStats(); fetchUsers(); }}>
+            🔄 Yangilash
+          </button>
+          <button className="btn-logout" onClick={handleLogout}>
+            🚪 Chiqish
+          </button>
+        </div>
+      </header>
 
-    let disconnectedUser = null;
-    for (const [tgId, data] of onlineUsers.entries()) {
-      if (data.socketId === socket.id) {
-        disconnectedUser = { tgId, ...data };
-        onlineUsers.delete(tgId);
-        break;
-      }
-    }
+      {/* XABARLAR */}
+      {error && (
+        <div className="error-message">
+          ⚠️ {error}
+          <button className="close-btn" onClick={() => setError(null)}>✕</button>
+        </div>
+      )}
+      
+      {successMessage && (
+        <div className="success-message">
+          ✅ {successMessage}
+          <button className="close-btn" onClick={() => setSuccessMessage(null)}>✕</button>
+        </div>
+      )}
 
-    if (disconnectedUser) {
-      io.emit('user_status', {
-        tgId: disconnectedUser.tgId,
-        status: 'offline',
-        firstName: disconnectedUser.firstName
-      });
-    }
+      {/* TAB NAVIGATION */}
+      <div className="tab-nav">
+        <button 
+          className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          📊 Dashboard
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
+        >
+          👥 Foydalanuvchilar
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'stats' ? 'active' : ''}`}
+          onClick={() => setActiveTab('stats')}
+        >
+          📈 Statistika
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('settings')}
+        >
+          ⚙️ Sozlamalar
+        </button>
+      </div>
 
-    for (const roomId in activeRooms) {
-      const room = activeRooms[roomId];
-      if (room.players.some(p => p.socketId === socket.id)) {
-        socket.to(roomId).emit('opponent_left');
-        if (room.timerInterval) clearInterval(room.timerInterval);
-        delete activeRooms[roomId];
-        break;
-      }
-    }
-  });
+      {/* ============================================================ */}
+      {/* TAB 1: DASHBOARD */}
+      {/* ============================================================ */}
+      {activeTab === 'dashboard' && (
+        <div className="tab-content">
+          {/* STATISTIKA KARTALARI */}
+          <div className="stats-grid">
+            <div className="stat-card primary">
+              <div className="stat-icon">👥</div>
+              <div className="stat-label">Jami O'yinchilar</div>
+              <div className="stat-value">{stats?.totalUsers || 0}</div>
+              <div className="stat-sub">🟢 Online: {stats?.onlineUsers || 0}</div>
+            </div>
+            
+            <div className="stat-card success">
+              <div className="stat-icon">🪙</div>
+              <div className="stat-label">Jami Tangalar</div>
+              <div className="stat-value">{(stats?.totalCoins || 0).toLocaleString()}</div>
+            </div>
+            
+            <div className="stat-card warning">
+              <div className="stat-icon">🏆</div>
+              <div className="stat-label">Umumiy Reyting</div>
+              <div className="stat-value">{(stats?.totalRating || 0).toLocaleString()}</div>
+            </div>
+            
+            <div className="stat-card info">
+              <div className="stat-icon">🎮</div>
+              <div className="stat-label">Jami O'yinlar</div>
+              <div className="stat-value">{(stats?.totalGames || 0).toLocaleString()}</div>
+            </div>
+            
+            <div className="stat-card purple">
+              <div className="stat-icon">🎯</div>
+              <div className="stat-label">Faol Xonalar</div>
+              <div className="stat-value">{stats?.activeRooms || 0}</div>
+            </div>
+            
+            <div className="stat-card danger">
+              <div className="stat-icon">🔍</div>
+              <div className="stat-label">Qidiruv Navbati</div>
+              <div className="stat-value">{stats?.searchQueue || 0}</div>
+            </div>
+          </div>
 
-  socket.on('ping', () => {
-    socket.emit('pong');
-  });
-});
+          {/* TOP 10 */}
+          {stats?.top10 && stats.top10.length > 0 && (
+            <div className="table-container">
+              <div className="table-header">
+                <h3 className="table-title">🏆 TOP 10 O'yinchilar</h3>
+              </div>
+              <div className="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Ism</th>
+                      <th>Username</th>
+                      <th>🏆 Reyting</th>
+                      <th>🪙 Tangalar</th>
+                      <th>🎮 O'yinlar</th>
+                      <th>🏅 G'alabalar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.top10.map((player, index) => (
+                      <tr key={player._id || index}>
+                        <td>
+                          <span className={`rank-${index + 1}`}>
+                            #{index + 1}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="avatar-cell">
+                            <img 
+                              src={player.photoUrl || `https://ui-avatars.com/api/?name=${player.firstName}&background=667eea&color=fff`} 
+                              alt={player.firstName}
+                              onError={(e) => e.target.src = `https://ui-avatars.com/api/?name=${player.firstName}&background=667eea&color=fff`}
+                            />
+                            <span className="user-name">{player.firstName}</span>
+                          </div>
+                        </td>
+                        <td>@{player.username || '—'}</td>
+                        <td><strong>{player.rating}</strong></td>
+                        <td>🪙 {player.coins}</td>
+                        <td>{player.totalGames || 0}</td>
+                        <td>
+                          <span className="win-rate">
+                            {player.wins || 0}
+                            {player.totalGames > 0 && (
+                              <span className="win-percent">
+                                ({Math.round((player.wins || 0) / player.totalGames * 100)}%)
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-// ======================
-// START SERVER
-// ======================
-server.listen(PORT, () => {
-  console.log(`🚀 Server ${PORT}-portda ishga tushdi`);
-  console.log(`🌐 Environment: ${NODE_ENV}`);
-  console.log(`📊 Web App URL: ${WEB_APP_URL}`);
-  console.log(`✅ CORS sozlamalari: ${allowedOrigins.join(', ')}`);
-});
+      {/* ============================================================ */}
+      {/* TAB 2: FOYDALANUVCHILAR */}
+      {/* ============================================================ */}
+      {activeTab === 'users' && (
+        <div className="tab-content">
+          <div className="table-container">
+            <div className="table-header">
+              <div className="table-search">
+                <div className="search-wrapper">
+                  <span className="search-icon">🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Qidirish (ID, Ism yoki Username)..."
+                    value={search}
+                    onChange={handleSearch}
+                    className="search-input"
+                  />
+                </div>
+                <select value={sortBy} onChange={handleSortChange} className="sort-select">
+                  <option value="rating">🏆 Reyting bo'yicha</option>
+                  <option value="coins">🪙 Tanga bo'yicha</option>
+                  <option value="games">🎮 O'yin bo'yicha</option>
+                  <option value="newest">🆕 Yangi bo'yicha</option>
+                </select>
+              </div>
+              
+              <div className="table-actions">
+                {selectedUsers.length > 0 && (
+                  <button className="btn-danger" onClick={bulkDelete}>
+                    🗑️ O'chirish ({selectedUsers.length})
+                  </button>
+                )}
+                <button className="btn-success" onClick={exportUsers}>
+                  📥 Eksport
+                </button>
+              </div>
+            </div>
 
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-});
+            <div className="table-responsive">
+              {loading ? (
+                <div className="loading-state">
+                  <div className="spinner"></div>
+                  <p>Yuklanmoqda...</p>
+                </div>
+              ) : users.length === 0 ? (
+                <div className="empty-state">
+                  <p>📭 Foydalanuvchilar topilmadi</p>
+                </div>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.length === users.length && users.length > 0}
+                          onChange={toggleSelectAll}
+                        />
+                      </th>
+                      <th>Foydalanuvchi</th>
+                      <th>Telegram ID</th>
+                      <th>🪙 Tangalar</th>
+                      <th>🏆 Reyting</th>
+                      <th>🎮 O'yinlar</th>
+                      <th>📅 Oxirgi faollik</th>
+                      <th style={{ width: '180px' }}>Amallar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => (
+                      <tr key={user._id} className={selectedUsers.includes(user._id) ? 'selected' : ''}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedUsers.includes(user._id)}
+                            onChange={() => toggleSelectUser(user._id)}
+                          />
+                        </td>
+                        <td>
+                          <div className="avatar-cell">
+                            <img
+                              src={user.photoUrl || `https://ui-avatars.com/api/?name=${user.firstName}&background=667eea&color=fff`}
+                              alt={user.firstName}
+                              onError={(e) => e.target.src = `https://ui-avatars.com/api/?name=${user.firstName}&background=667eea&color=fff`}
+                            />
+                            <div>
+                              <div className="user-name">{user.firstName}</div>
+                              <div className="user-username">@{user.username || 'username yo\'q'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="mono">{user.tgId}</td>
+                        <td>
+                          <div className="coin-cell">
+                            <span className="coin-value">{user.coins}</span>
+                            <div className="coin-actions">
+                              <button className="btn-plus" onClick={() => updateCoins(user._id, 50)}>+50</button>
+                              <button className="btn-minus" onClick={() => updateCoins(user._id, -50)}>-50</button>
+                              <button className="btn-plus-big" onClick={() => updateCoins(user._id, 100)}>+100</button>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="rating-badge">{user.rating}</span>
+                        </td>
+                        <td>
+                          <div>
+                            <div>{user.totalGames || 0} o'yin</div>
+                            <div className="games-detail">
+                              🏅 {user.wins || 0} g'alaba
+                              {user.totalGames > 0 && (
+                                <span className="win-percent">
+                                  ({Math.round((user.wins || 0) / user.totalGames * 100)}%)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="date-cell">
+                          {formatDate(user.lastLogin)}
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button className="btn-edit" onClick={() => openEditModal(user)}>
+                              ✏️ Tahrirlash
+                            </button>
+                            <button className="btn-delete" onClick={() => deleteUser(user._id)}>
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection:', reason);
-});
+            {/* PAGINATION */}
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button 
+                  className="page-btn" 
+                  onClick={() => handlePageChange(currentPage - 1)} 
+                  disabled={currentPage === 1}
+                >
+                  ⬅️
+                </button>
+                
+                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                  let pageNum = i + 1;
+                  if (currentPage > 3 && totalPages > 5) {
+                    if (i === 0) pageNum = 1;
+                    else if (i === 1) pageNum = currentPage - 1;
+                    else if (i === 2) pageNum = currentPage;
+                    else if (i === 3) pageNum = currentPage + 1;
+                    else if (i === 4) pageNum = totalPages;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`page-btn ${pageNum === currentPage ? 'active' : ''}`}
+                      onClick={() => handlePageChange(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                
+                <button 
+                  className="page-btn" 
+                  onClick={() => handlePageChange(currentPage + 1)} 
+                  disabled={currentPage === totalPages}
+                >
+                  ➡️
+                </button>
+                <span className="page-info">
+                  {totalUsers} ta foydalanuvchi
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB 3: STATISTIKA */}
+      {/* ============================================================ */}
+      {activeTab === 'stats' && (
+        <div className="tab-content">
+          <div className="stats-grid">
+            <div className="stat-card primary">
+              <div className="stat-icon">👥</div>
+              <div className="stat-label">Jami O'yinchilar</div>
+              <div className="stat-value">{stats?.totalUsers || 0}</div>
+              <div className="stat-sub">🟢 Online: {stats?.onlineUsers || 0}</div>
+            </div>
+            
+            <div className="stat-card success">
+              <div className="stat-icon">🪙</div>
+              <div className="stat-label">Jami Tangalar</div>
+              <div className="stat-value">{(stats?.totalCoins || 0).toLocaleString()}</div>
+            </div>
+            
+            <div className="stat-card warning">
+              <div className="stat-icon">🏆</div>
+              <div className="stat-label">Umumiy Reyting</div>
+              <div className="stat-value">{(stats?.totalRating || 0).toLocaleString()}</div>
+            </div>
+            
+            <div className="stat-card info">
+              <div className="stat-icon">🎮</div>
+              <div className="stat-label">Jami O'yinlar</div>
+              <div className="stat-value">{(stats?.totalGames || 0).toLocaleString()}</div>
+            </div>
+          </div>
+
+          {/* Aktivlik */}
+          <div className="table-container" style={{ marginTop: '20px' }}>
+            <div className="table-header">
+              <h3 className="table-title">📊 Aktivlik Ma'lumotlari</h3>
+              <span className="update-time">
+                🕐 Yangilangan: {new Date().toLocaleTimeString('uz-UZ')}
+              </span>
+            </div>
+            <div className="activity-grid">
+              <div className="activity-item">
+                <div className="activity-label">Faol Xonalar</div>
+                <div className="activity-value">{stats?.activeRooms || 0}</div>
+              </div>
+              <div className="activity-item">
+                <div className="activity-label">Qidiruv Navbati</div>
+                <div className="activity-value">{stats?.searchQueue || 0}</div>
+              </div>
+              <div className="activity-item">
+                <div className="activity-label">Online Foydalanuvchilar</div>
+                <div className="activity-value" style={{ color: '#48bb78' }}>{stats?.onlineUsers || 0}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB 4: SOZLAMALAR */}
+      {/* ============================================================ */}
+      {activeTab === 'settings' && (
+        <div className="tab-content">
+          <div className="table-container">
+            <div className="table-header">
+              <h3 className="table-title">⚙️ Sozlamalar</h3>
+            </div>
+            
+            <form onSubmit={(e) => { e.preventDefault(); }} style={{ padding: '24px' }}>
+              <div className="form-group">
+                <label>📱 Ilova Nomi</label>
+                <input
+                  type="text"
+                  value="Like-Duel Admin"
+                  className="admin-input"
+                  disabled
+                  style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>🌐 API URL</label>
+                <input
+                  type="text"
+                  value={API_URL}
+                  className="admin-input"
+                  disabled
+                  style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
+                />
+                <small className="form-hint">
+                  API URL ni o'zgartirish uchun .env faylini tahrirlang
+                </small>
+              </div>
+
+              <div className="form-group">
+                <label>🔑 Admin Token</label>
+                <input
+                  type="password"
+                  value={adminKey}
+                  onChange={(e) => {
+                    setAdminKey(e.target.value);
+                    localStorage.setItem('admin_token', e.target.value);
+                  }}
+                  className="admin-input"
+                  placeholder="Admin token..."
+                />
+                <small className="form-hint">
+                  Token o'zgartirilganda qayta kirish talab qilinadi
+                </small>
+              </div>
+
+              <div className="form-actions">
+                <button type="button" className="btn-warning" onClick={() => {
+                  localStorage.clear();
+                  window.location.reload();
+                }}>
+                  🗑️ Keshni Tozalash
+                </button>
+                <button type="button" className="btn-primary" onClick={() => {
+                  setSuccessMessage('✅ Sozlamalar saqlandi');
+                  setTimeout(() => setSuccessMessage(null), 3000);
+                }}>
+                  💾 Saqlash
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* System Info */}
+          <div className="table-container" style={{ marginTop: '20px' }}>
+            <div className="table-header">
+              <h3 className="table-title">ℹ️ Tizim Ma'lumotlari</h3>
+            </div>
+            <div className="system-info">
+              <div className="info-item">
+                <span className="info-label">Versiya</span>
+                <span className="info-value">v2.0.0</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">React Versiya</span>
+                <span className="info-value">{React.version}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">Environment</span>
+                <span className="info-value">{import.meta.env?.MODE || 'production'}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">Foydalanuvchilar</span>
+                <span className="info-value">{stats?.totalUsers || 0}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAHRIRLASH MODAL */}
+      {/* ============================================================ */}
+      {showEditModal && editingUser && (
+        <div className="modal-overlay" onClick={closeEditModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>✏️ Foydalanuvchini Tahrirlash</h3>
+              <button className="modal-close" onClick={closeEditModal}>✕</button>
+            </div>
+            
+            <form onSubmit={handleSaveUser}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Ismi *</label>
+                  <input
+                    type="text"
+                    value={editingUser.firstName || ''}
+                    onChange={(e) => setEditingUser({...editingUser, firstName: e.target.value})}
+                    className="admin-input"
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Username</label>
+                  <input
+                    type="text"
+                    value={editingUser.username || ''}
+                    onChange={(e) => setEditingUser({...editingUser, username: e.target.value})}
+                    className="admin-input"
+                  />
+                </div>
+                
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>🪙 Tangalar *</label>
+                    <input
+                      type="number"
+                      value={editingUser.coins || 0}
+                      onChange={(e) => setEditingUser({...editingUser, coins: e.target.value})}
+                      className="admin-input"
+                      min="0"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>🏆 Reyting *</label>
+                    <input
+                      type="number"
+                      value={editingUser.rating || 0}
+                      onChange={(e) => setEditingUser({...editingUser, rating: e.target.value})}
+                      className="admin-input"
+                      min="0"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Rasm URL</label>
+                  <input
+                    type="text"
+                    value={editingUser.photoUrl || ''}
+                    onChange={(e) => setEditingUser({...editingUser, photoUrl: e.target.value})}
+                    className="admin-input"
+                    placeholder="https://example.com/avatar.jpg"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Telegram ID</label>
+                  <input
+                    type="text"
+                    value={editingUser.tgId || ''}
+                    className="admin-input"
+                    disabled
+                    style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
+                  />
+                  <small className="form-hint">Telegram ID o'zgartirib bo'lmaydi</small>
+                </div>
+              </div>
+              
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={closeEditModal}>
+                  ❌ Bekor qilish
+                </button>
+                <button type="submit" className="btn-save" disabled={loading}>
+                  {loading ? '⏳ Saqlanmoqda...' : '💾 Saqlash'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
