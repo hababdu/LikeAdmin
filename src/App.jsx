@@ -1,6 +1,6 @@
 import express from 'express';
 import http from 'http';
-import { Server } from 'socket.io';
+import { io } from 'socket.io-client'; // ✅ TO'G'RI! Bu frontend uchun
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
