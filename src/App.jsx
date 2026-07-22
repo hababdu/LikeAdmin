@@ -30,7 +30,7 @@ function App() {
   // KONSTANTALAR
   // ======================
   const API_URL = import.meta.env?.VITE_API_URL || 'https://telegram-bot-server-2-matj.onrender.com';
-  const ADMIN_TOKEN = import.meta.env?.VITE_ADMIN_TOKEN || 'admin-secret-key';
+  const ADMIN_TOKEN = import.meta.env?.VITE_ADMIN_TOKEN || '0000';
   const LIMIT = 20;
 
   // ======================
