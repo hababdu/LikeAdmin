@@ -1,1042 +1,817 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import './App.css';
-
 // ============================================================
-// ADMIN PANEL - TO'LIQ LOYIHA
+// 1. AdminPanel.js - TO'LIQ ADMIN PANEL
 // ============================================================
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import './AdminPanel.css';
 
-function App() {
+function AdminPanel({ onBack, user }) {
   // ======================
-  // STATE'LAR
+  // STATE
   // ======================
-  const [adminKey, setAdminKey] = useState(localStorage.getItem('admin_token') || '');
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
-  const [totalUsers, setTotalUsers] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('rating');
-  const [selectedUsers, setSelectedUsers] = useState([]);
-  const [editingUser, setEditingUser] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [error, setError] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('users');
+  const [adminKey, setAdminKey] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [socketRooms, setSocketRooms] = useState([]);
+  const [searchQueue, setSearchQueue] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [showLogs, setShowLogs] = useState(false);
 
   // ======================
-  // KONSTANTALAR
+  // CONSTANTS
   // ======================
-  const API_URL = import.meta.env?.VITE_API_URL || 'https://telegram-bot-server-2-matj.onrender.com';
-  const ADMIN_TOKEN = import.meta.env?.VITE_ADMIN_TOKEN || '0000';
-  const LIMIT = 20;
+  const BACKEND_URL = process.env.NODE_ENV === 'production'
+    ? 'https://telegram-bot-server-2-matj.onrender.com'
+    : 'http://localhost:10000';
 
-  // ======================
-  // HEADER FUNKSIYALARI
-  // ======================
-  const getHeaders = () => ({
-    'Content-Type': 'application/json',
-    'x-admin-key': adminKey,
-    'Authorization': `Bearer ${adminKey}`
-  });
+  const ADMIN_TOKEN = 'admin-secret-key'; // Servernikiga mos kelishi kerak
 
   // ======================
-  // API FUNKSIYALARI
+  // ADMIN AUTHENTICATION
   // ======================
-
-  // 1. STATISTIKA
-  const fetchStats = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_URL}/api/admin/stats`, {
-        headers: getHeaders()
-      });
-      
-      if (res.status === 403) {
-        setIsAuthorized(false);
-        setError('Admin ruxsati yo\'q. Kalitni tekshiring.');
-        localStorage.removeItem('admin_token');
-        setLoading(false);
-        return;
-      }
-
-      const data = await res.json();
-      if (data.success) {
-        setStats(data.data);
-      } else {
-        setError(data.message || 'Statistika yuklashda xatolik');
-      }
-    } catch (err) {
-      console.error('Stats error:', err);
-      setError('Serverga ulanishda xatolik');
-    } finally {
-      setLoading(false);
-    }
-  }, [adminKey, API_URL]);
-
-  // 2. FOYDALANUVCHILAR
-  const fetchUsers = useCallback(async (page = currentPage, searchTerm = search, sort = sortBy) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `${API_URL}/api/admin/users?page=${page}&limit=${LIMIT}&search=${encodeURIComponent(searchTerm)}&sortBy=${sort}`,
-        { headers: getHeaders() }
-      );
-      
-      if (res.status === 403) {
-        setIsAuthorized(false);
-        setError('Admin ruxsati yo\'q');
-        localStorage.removeItem('admin_token');
-        setLoading(false);
-        return;
-      }
-
-      const data = await res.json();
-      if (data.success) {
-        setUsers(data.users || []);
-        setTotalUsers(data.total || 0);
-        setTotalPages(data.totalPages || 1);
-        setCurrentPage(page);
-      } else {
-        setError(data.message || 'Foydalanuvchilarni yuklashda xatolik');
-      }
-    } catch (err) {
-      console.error('Users error:', err);
-      setError('Serverga ulanishda xatolik');
-    } finally {
-      setLoading(false);
-    }
-  }, [adminKey, API_URL, currentPage, search, sortBy]);
-
-  // 3. FOYDALANUVCHI YANGILASH
-  const updateUser = async (id, data) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/admin/users/${id}`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify(data)
-      });
-      
-      const result = await res.json();
-      if (result.success) {
-        setSuccessMessage('✅ Foydalanuvchi muvaffaqiyatli yangilandi!');
-        setTimeout(() => setSuccessMessage(null), 3000);
-        await fetchUsers();
-        await fetchStats();
-        setShowEditModal(false);
-        return true;
-      } else {
-        setError(result.message || 'Yangilashda xatolik');
-        return false;
-      }
-    } catch (err) {
-      console.error('Update error:', err);
-      setError('Server xatoligi');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 4. COIN QO'SHISH
-  const updateCoins = async (id, amount) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/admin/users/${id}/coins`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ amount })
-      });
-      
-      const result = await res.json();
-      if (result.success) {
-        setSuccessMessage(`🪙 ${amount > 0 ? '+' : ''}${amount} tanga ${amount > 0 ? 'qo\'shildi' : 'ayirildi'}`);
-        setTimeout(() => setSuccessMessage(null), 3000);
-        await fetchUsers();
-        await fetchStats();
-      } else {
-        setError(result.message || 'Coin o\'zgartirishda xatolik');
-      }
-    } catch (err) {
-      console.error('Coins error:', err);
-      setError('Server xatoligi');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 5. FOYDALANUVCHI O'CHIRISH
-  const deleteUser = async (id) => {
-    if (!window.confirm('⚠️ Bu amal qaytarib bo\'lmaydi! Foydalanuvchini o\'chirmoqchimisiz?')) return;
-    
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/admin/users/${id}`, {
-        method: 'DELETE',
-        headers: getHeaders()
-      });
-      
-      const result = await res.json();
-      if (result.success) {
-        setSuccessMessage('🗑️ Foydalanuvchi o\'chirildi');
-        setTimeout(() => setSuccessMessage(null), 3000);
-        await fetchUsers();
-        await fetchStats();
-      } else {
-        setError(result.message || 'O\'chirishda xatolik');
-      }
-    } catch (err) {
-      console.error('Delete error:', err);
-      setError('Server xatoligi');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 6. KO'P O'CHIRISH
-  const bulkDelete = async () => {
-    if (selectedUsers.length === 0) {
-      setError('Hech qanday foydalanuvchi tanlanmagan');
-      return;
-    }
-    
-    if (!window.confirm(`⚠️ ${selectedUsers.length} ta foydalanuvchini o'chirmoqchimisiz?`)) return;
-    
-    setLoading(true);
-    let deleted = 0;
-    for (const id of selectedUsers) {
-      try {
-        const res = await fetch(`${API_URL}/api/admin/users/${id}`, {
-          method: 'DELETE',
-          headers: getHeaders()
-        });
-        const result = await res.json();
-        if (result.success) deleted++;
-      } catch (err) {
-        console.error('Bulk delete error:', err);
-      }
-    }
-    
-    setSuccessMessage(`✅ ${deleted} ta foydalanuvchi o'chirildi`);
-    setTimeout(() => setSuccessMessage(null), 3000);
-    setSelectedUsers([]);
-    await fetchUsers();
-    await fetchStats();
-    setLoading(false);
-  };
-
-  // 7. EKSPORT
-  const exportUsers = async () => {
-    if (users.length === 0) {
-      setError('Eksport qilish uchun foydalanuvchilar yo\'q');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const headers = ['ID', 'Telegram ID', 'Ism', 'Username', 'Tangalar', 'Reyting', 'O\'yinlar', 'G\'alabalar'];
-      const csvData = users.map(u => [
-        u._id,
-        u.tgId,
-        u.firstName,
-        u.username || '',
-        u.coins,
-        u.rating,
-        u.totalGames || 0,
-        u.wins || 0
-      ]);
-      
-      const csvContent = [headers.join(','), ...csvData.map(row => row.join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `users_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setSuccessMessage('📊 Foydalanuvchilar eksport qilindi');
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
-      console.error('Export error:', err);
-      setError('Eksportda xatolik');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ======================
-  // EVENT HANDLER'LAR
-  // ======================
-
-  // LOGIN
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (adminKey.trim()) {
-      if (adminKey === ADMIN_TOKEN) {
-        localStorage.setItem('admin_token', adminKey);
-        setIsAuthorized(true);
-        setError(null);
-        fetchStats();
-        fetchUsers();
-      } else {
-        setError('❌ Noto\'g\'ri admin kaliti!');
-      }
-    }
-  };
-
-  // QIDIRUV
-  const handleSearch = (e) => {
-    const value = e.target.value;
-    setSearch(value);
-    setCurrentPage(1);
-    fetchUsers(1, value, sortBy);
-  };
-
-  // SAHIFA O'ZGARISHI
-  const handlePageChange = (page) => {
-    fetchUsers(page, search, sortBy);
-  };
-
-  // SORT O'ZGARISHI
-  const handleSortChange = (e) => {
-    const value = e.target.value;
-    setSortBy(value);
-    setCurrentPage(1);
-    fetchUsers(1, search, value);
-  };
-
-  // TANLASH
-  const toggleSelectUser = (id) => {
-    setSelectedUsers(prev => 
-      prev.includes(id) 
-        ? prev.filter(uid => uid !== id)
-        : [...prev, id]
-    );
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedUsers.length === users.length && users.length > 0) {
-      setSelectedUsers([]);
+  const handleLogin = useCallback(() => {
+    if (adminKey === ADMIN_TOKEN) {
+      setIsAuthenticated(true);
+      setAuthError('');
+      localStorage.setItem('adminToken', adminKey);
+      fetchStats();
+      fetchUsers();
     } else {
-      setSelectedUsers(users.map(u => u._id));
+      setAuthError('❌ Noto\'g\'ri admin kalit!');
     }
-  };
+  }, [adminKey]);
 
-  // TAHRIRLASH MODAL
-  const openEditModal = (user) => {
-    setEditingUser({ ...user });
-    setShowEditModal(true);
-  };
-
-  const closeEditModal = () => {
-    setShowEditModal(false);
-    setEditingUser(null);
-  };
-
-  const handleSaveUser = async (e) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    
-    await updateUser(editingUser._id, {
-      firstName: editingUser.firstName,
-      username: editingUser.username,
-      coins: Number(editingUser.coins),
-      rating: Number(editingUser.rating),
-      photoUrl: editingUser.photoUrl
-    });
-  };
-
-  // CHIQISH
-  const handleLogout = () => {
-    localStorage.removeItem('admin_token');
-    setIsAuthorized(false);
-    setUsers([]);
-    setStats(null);
-    setAdminKey('');
-    setSuccessMessage('👋 Tizimdan chiqdingiz');
-    setTimeout(() => setSuccessMessage(null), 3000);
-  };
-
-  // FORMAT DATE
-  const formatDate = (date) => {
-    if (!date) return '—';
-    return new Date(date).toLocaleDateString('uz-UZ', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  // ======================
-  // EFFECT'LAR
-  // ======================
   useEffect(() => {
-    if (adminKey && adminKey === ADMIN_TOKEN) {
-      setIsAuthorized(true);
+    const savedToken = localStorage.getItem('adminToken');
+    if (savedToken === ADMIN_TOKEN) {
+      setAdminKey(savedToken);
+      setIsAuthenticated(true);
       fetchStats();
       fetchUsers();
     }
   }, []);
 
-  // ============================================================
-  // LOGIN EKRANI
-  // ============================================================
-  if (!isAuthorized) {
+  // ======================
+  // API CALLS
+  // ======================
+  const getHeaders = useCallback(() => ({
+    'Content-Type': 'application/json',
+    'x-admin-key': adminKey
+  }), [adminKey]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/stats`, {
+        headers: getHeaders()
+      });
+      const data = await response.json();
+      if (data.success) {
+        setStats(data.data);
+      }
+    } catch (error) {
+      console.error('Stats fetch error:', error);
+    }
+  }, [BACKEND_URL, getHeaders]);
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/api/admin/users?search=${searchTerm}&page=${currentPage}&sortBy=${sortBy}`,
+        { headers: getHeaders() }
+      );
+      const data = await response.json();
+      if (data.success) {
+        setUsers(data.users || []);
+        setTotalPages(data.totalPages || 1);
+      } else {
+        setError('Foydalanuvchilarni yuklashda xatolik');
+      }
+    } catch (error) {
+      setError('Serverga ulanishda xatolik');
+      console.error('Users fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [BACKEND_URL, getHeaders, searchTerm, currentPage, sortBy]);
+
+  const fetchSocketStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/socket-status`, {
+        headers: getHeaders()
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSocketRooms(data.data.rooms || []);
+        setSearchQueue(data.data.searchQueue || []);
+        setOnlineUsers(data.data.onlineUsers || []);
+      }
+    } catch (error) {
+      console.error('Socket status fetch error:', error);
+    }
+  }, [BACKEND_URL, getHeaders]);
+
+  const fetchLogs = useCallback(async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/logs`, {
+        headers: getHeaders()
+      });
+      const data = await response.json();
+      if (data.success) {
+        setLogs(data.data.logs || []);
+      }
+    } catch (error) {
+      console.error('Logs fetch error:', error);
+    }
+  }, [BACKEND_URL, getHeaders]);
+
+  const updateUser = useCallback(async (userId, updates) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(updates)
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchUsers();
+        fetchStats();
+        setShowEditModal(false);
+        alert('✅ Foydalanuvchi muvaffaqiyatli yangilandi!');
+      } else {
+        alert('❌ Xatolik: ' + data.message);
+      }
+    } catch (error) {
+      alert('❌ Server xatoligi');
+      console.error('Update error:', error);
+    }
+  }, [BACKEND_URL, getHeaders, fetchUsers, fetchStats]);
+
+  const deleteUser = useCallback(async (userId) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchUsers();
+        fetchStats();
+        setShowDeleteModal(false);
+        alert('✅ Foydalanuvchi o\'chirildi!');
+      } else {
+        alert('❌ Xatolik: ' + data.message);
+      }
+    } catch (error) {
+      alert('❌ Server xatoligi');
+      console.error('Delete error:', error);
+    }
+  }, [BACKEND_URL, getHeaders, fetchUsers, fetchStats]);
+
+  const updateCoins = useCallback(async (userId, amount) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${userId}/coins`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ amount })
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchUsers();
+        fetchStats();
+        alert('✅ Tangalar yangilandi!');
+      } else {
+        alert('❌ Xatolik: ' + data.message);
+      }
+    } catch (error) {
+      alert('❌ Server xatoligi');
+      console.error('Coins update error:', error);
+    }
+  }, [BACKEND_URL, getHeaders, fetchUsers, fetchStats]);
+
+  // ======================
+  // AUTO REFRESH
+  // ======================
+  useEffect(() => {
+    if (isAuthenticated) {
+      const interval = setInterval(() => {
+        fetchStats();
+        if (activeTab === 'users') fetchUsers();
+        if (activeTab === 'socket') fetchSocketStatus();
+      }, 30000);
+
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, activeTab, fetchStats, fetchUsers, fetchSocketStatus]);
+
+  // ======================
+  // FORMAT FUNCTIONS
+  // ======================
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleString('uz-UZ');
+  };
+
+  const getRankBadge = (index) => {
+    if (index === 0) return '🥇';
+    if (index === 1) return '🥈';
+    if (index === 2) return '🥉';
+    return `#${index + 1}`;
+  };
+
+  const getStatusBadge = (isOnline) => {
+    return isOnline ? '🟢 Online' : '🔴 Offline';
+  };
+
+  // ======================
+  // ADMIN LOGIN SCREEN
+  // ======================
+  if (!isAuthenticated) {
     return (
-      <div className="login-container">
-        <div className="login-card">
-          <div className="login-header">
-            <div className="login-icon">🔐</div>
-            <h2>Admin Tizimiga Kirish</h2>
-            <p>Like-Duel boshqaruv paneli</p>
+      <div className="admin-login">
+        <div className="admin-login-box">
+          <div className="admin-login-header">
+            <h2>🔐 Admin Panel</h2>
+            <p>Iltimos, admin kalitini kiriting</p>
           </div>
-          
-          {error && (
-            <div className="error-message">
-              ⚠️ {error}
-              <button className="close-btn" onClick={() => setError(null)}>✕</button>
-            </div>
-          )}
-          
-          <form onSubmit={handleLogin}>
-            <div className="form-group">
-              <label>🔑 Admin Secret Key</label>
-              <input 
-                type="password" 
-                placeholder="Secret keyni kiriting..." 
-                value={adminKey}
-                onChange={(e) => setAdminKey(e.target.value)}
-                className="admin-input"
-                required
-                autoFocus
-              />
-            </div>
-            
-            <button type="submit" className="btn-primary btn-block">
-              🚪 Kirish
+          <div className="admin-login-body">
+            <input
+              type="password"
+              className="admin-input"
+              placeholder="Admin kalitini kiriting..."
+              value={adminKey}
+              onChange={(e) => setAdminKey(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+            />
+            {authError && <div className="admin-error">{authError}</div>}
+            <button className="admin-btn admin-btn-primary" onClick={handleLogin}>
+              Kirish
             </button>
-          </form>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ============================================================
-  // ASOSIY PANEL
-  // ============================================================
-  return (
-    <div className="admin-wrapper">
-      {/* HEADER */}
-      <header className="admin-header">
-        <div className="header-left">
-          <h1>🛠️ Like-Duel Admin</h1>
-          <span className="header-badge">v2.0</span>
+  // ======================
+  // EDIT MODAL
+  // ======================
+  const EditModal = () => {
+    if (!showEditModal || !editingUser) return null;
+
+    const [formData, setFormData] = useState({
+      firstName: editingUser.firstName || '',
+      username: editingUser.username || '',
+      coins: editingUser.coins || 0,
+      rating: editingUser.rating || 0,
+      photoUrl: editingUser.photoUrl || ''
+    });
+
+    const handleSubmit = () => {
+      updateUser(editingUser._id, formData);
+    };
+
+    return (
+      <div className="admin-modal-overlay" onClick={() => setShowEditModal(false)}>
+        <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="admin-modal-header">
+            <h3>✏️ Foydalanuvchini Tahrirlash</h3>
+            <button className="admin-modal-close" onClick={() => setShowEditModal(false)}>✕</button>
+          </div>
+          <div className="admin-modal-body">
+            <div className="form-group">
+              <label>Ism</label>
+              <input
+                type="text"
+                className="admin-input"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Username</label>
+              <input
+                type="text"
+                className="admin-input"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Tangalar</label>
+              <input
+                type="number"
+                className="admin-input"
+                value={formData.coins}
+                onChange={(e) => setFormData({ ...formData, coins: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Reyting (XP)</label>
+              <input
+                type="number"
+                className="admin-input"
+                value={formData.rating}
+                onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Rasm URL</label>
+              <input
+                type="text"
+                className="admin-input"
+                value={formData.photoUrl}
+                onChange={(e) => setFormData({ ...formData, photoUrl: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="admin-modal-footer">
+            <button className="admin-btn admin-btn-secondary" onClick={() => setShowEditModal(false)}>
+              Bekor qilish
+            </button>
+            <button className="admin-btn admin-btn-primary" onClick={handleSubmit}>
+              Saqlash
+            </button>
+          </div>
         </div>
-        <div className="header-right">
-          <span className="user-badge">👤 Admin</span>
-          <button className="btn-refresh" onClick={() => { fetchStats(); fetchUsers(); }}>
-            🔄 Yangilash
+      </div>
+    );
+  };
+
+  // ======================
+  // DELETE MODAL
+  // ======================
+  const DeleteModal = () => {
+    if (!showDeleteModal || !selectedUser) return null;
+
+    return (
+      <div className="admin-modal-overlay" onClick={() => setShowDeleteModal(false)}>
+        <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="admin-modal-header">
+            <h3>⚠️ Foydalanuvchini O'chirish</h3>
+            <button className="admin-modal-close" onClick={() => setShowDeleteModal(false)}>✕</button>
+          </div>
+          <div className="admin-modal-body">
+            <p>
+              <strong>{selectedUser.firstName}</strong> ({selectedUser.tgId}) foydalanuvchini o'chirmoqchimisiz?
+            </p>
+            <p className="admin-warning">Bu amal qaytarib bo'lmaydi!</p>
+          </div>
+          <div className="admin-modal-footer">
+            <button className="admin-btn admin-btn-secondary" onClick={() => setShowDeleteModal(false)}>
+              Bekor qilish
+            </button>
+            <button className="admin-btn admin-btn-danger" onClick={() => deleteUser(selectedUser._id)}>
+              O'chirish
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ======================
+  // STATS CARDS
+  // ======================
+  const StatsCards = () => {
+    if (!stats) return null;
+
+    return (
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon">👥</div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.totalUsers || 0}</span>
+            <span className="stat-label">Jami Foydalanuvchilar</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">🟢</div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.onlineUsers || 0}</span>
+            <span className="stat-label">Online Foydalanuvchilar</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">🪙</div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.totalCoins || 0}</span>
+            <span className="stat-label">Jami Tangalar</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">🏆</div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.totalRating || 0}</span>
+            <span className="stat-label">Jami XP</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">🎮</div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.totalGames || 0}</span>
+            <span className="stat-label">Jami O'yinlar</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">🏠</div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.activeRooms || 0}</span>
+            <span className="stat-label">Faol Xonalar</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">🔍</div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.searchQueue || 0}</span>
+            <span className="stat-label">Navbatdagilar</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">📊</div>
+          <div className="stat-info">
+            <span className="stat-value">{stats.top10?.length || 0}</span>
+            <span className="stat-label">TOP 10</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ======================
+  // TOP 10 LIST
+  // ======================
+  const Top10List = () => {
+    if (!stats?.top10) return null;
+
+    return (
+      <div className="top10-container">
+        <h3>🏆 TOP 10 Peshqadamlar</h3>
+        <div className="top10-list">
+          {stats.top10.map((player, index) => (
+            <div key={player.tgId || index} className="top10-item">
+              <span className="top10-rank">{getRankBadge(index)}</span>
+              <span className="top10-name">{player.firstName}</span>
+              <span className="top10-coins">🪙 {player.coins}</span>
+              <span className="top10-rating">🏆 {player.rating}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ======================
+  // USERS TABLE
+  // ======================
+  const UsersTable = () => (
+    <div className="users-table-container">
+      <div className="table-toolbar">
+        <div className="search-box">
+          <input
+            type="text"
+            placeholder="🔍 Foydalanuvchi qidirish..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="admin-input"
+          />
+        </div>
+        <div className="sort-select">
+          <select
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="admin-select"
+          >
+            <option value="rating">🏆 Reyting</option>
+            <option value="coins">🪙 Tangalar</option>
+            <option value="games">🎮 O'yinlar</option>
+            <option value="newest">🆕 Yangi</option>
+          </select>
+        </div>
+        <button className="admin-btn admin-btn-primary" onClick={fetchUsers}>
+          🔄 Yangilash
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="loading-state">
+          <div className="spinner"></div>
+          <p>Yuklanmoqda...</p>
+        </div>
+      ) : users.length === 0 ? (
+        <div className="empty-state">
+          <p>📭 Foydalanuvchilar topilmadi</p>
+        </div>
+      ) : (
+        <>
+          <div className="table-responsive">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Foydalanuvchi</th>
+                  <th>🪙 Tanga</th>
+                  <th>🏆 XP</th>
+                  <th>🎮 O'yin</th>
+                  <th>🏅 G'alaba</th>
+                  <th>📊 Win Rate</th>
+                  <th>Status</th>
+                  <th>So'nggi faol</th>
+                  <th>Amallar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user, index) => (
+                  <tr key={user._id}>
+                    <td>{((currentPage - 1) * 20) + index + 1}</td>
+                    <td>
+                      <div className="user-cell">
+                        <img
+                          src={user.photoUrl || `https://ui-avatars.com/api/?name=${user.firstName}&background=667eea&color=fff`}
+                          alt={user.firstName}
+                          className="user-avatar"
+                          onError={(e) => e.target.src = `https://ui-avatars.com/api/?name=${user.firstName}&background=667eea&color=fff`}
+                        />
+                        <div className="user-info">
+                          <span className="user-name">{user.firstName}</span>
+                          {user.username && <span className="user-username">@{user.username}</span>}
+                          <span className="user-id">ID: {user.tgId}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-center">{user.coins}</td>
+                    <td className="text-center">{user.rating}</td>
+                    <td className="text-center">{user.totalGames || 0}</td>
+                    <td className="text-center">{user.wins || 0}</td>
+                    <td className="text-center">
+                      {user.totalGames > 0 ? Math.round((user.wins / user.totalGames) * 100) : 0}%
+                    </td>
+                    <td className="text-center">
+                      <span className={`status-badge ${user.isOnline ? 'online' : 'offline'}`}>
+                        {user.isOnline ? '🟢 Online' : '🔴 Offline'}
+                      </span>
+                    </td>
+                    <td className="text-center">{formatDate(user.lastLogin)}</td>
+                    <td>
+                      <div className="action-buttons">
+                        <button
+                          className="action-btn edit-btn"
+                          onClick={() => {
+                            setEditingUser(user);
+                            setShowEditModal(true);
+                          }}
+                          title="Tahrirlash"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="action-btn coin-btn"
+                          onClick={() => {
+                            const amount = prompt('Nechta tanga qo\'shish/ayirish? (masalan: 50 yoki -30)');
+                            if (amount !== null) {
+                              updateCoins(user._id, parseInt(amount) || 0);
+                            }
+                          }}
+                          title="Tangalarni o'zgartirish"
+                        >
+                          🪙
+                        </button>
+                        <button
+                          className="action-btn delete-btn"
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setShowDeleteModal(true);
+                          }}
+                          title="O'chirish"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="pagination">
+              <button
+                className="page-btn"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                ⬅️
+              </button>
+              <span className="page-info">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                className="page-btn"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                ➡️
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  // ======================
+  // SOCKET STATUS
+  // ======================
+  const SocketStatus = () => (
+    <div className="socket-status-container">
+      <div className="socket-stats">
+        <div className="socket-stat">
+          <span className="label">🔌 Faol xonalar:</span>
+          <span className="value">{socketRooms.length}</span>
+        </div>
+        <div className="socket-stat">
+          <span className="label">🔍 Navbatdagilar:</span>
+          <span className="value">{searchQueue.length}</span>
+        </div>
+        <div className="socket-stat">
+          <span className="label">🟢 Online:</span>
+          <span className="value">{onlineUsers.length}</span>
+        </div>
+      </div>
+
+      {onlineUsers.length > 0 && (
+        <div className="online-users-list">
+          <h4>🟢 Online Foydalanuvchilar</h4>
+          <div className="online-users-grid">
+            {onlineUsers.map((user, index) => (
+              <div key={index} className="online-user">
+                <span className="user-name">{user.firstName}</span>
+                <span className="user-rating">🏆 {user.rating}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {socketRooms.length > 0 && (
+        <div className="active-rooms-list">
+          <h4>🏠 Faol Xonalar</h4>
+          {socketRooms.map((room, index) => (
+            <div key={index} className="room-item">
+              <span className="room-id">{room.roomId}</span>
+              <span className="room-players">
+                {room.players?.map(p => p.name).join(' vs ')}
+              </span>
+              <span className="room-stake">🪙 {room.stake}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ======================
+  // LOGS
+  // ======================
+  const LogsView = () => (
+    <div className="logs-container">
+      <div className="logs-header">
+        <h3>📋 Server Loglar</h3>
+        <button className="admin-btn admin-btn-secondary" onClick={fetchLogs}>
+          🔄 Yangilash
+        </button>
+      </div>
+      <div className="logs-list">
+        {logs.map((log, index) => (
+          <div key={index} className="log-item">
+            <span className="log-time">{formatDate(log.timestamp)}</span>
+            <span className={`log-level ${log.level}`}>{log.level}</span>
+            <span className="log-message">{log.message}</span>
+          </div>
+        ))}
+        {logs.length === 0 && (
+          <div className="empty-state">
+            <p>📭 Hech qanday log topilmadi</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ======================
+  // MAIN RENDER
+  // ======================
+  return (
+    <div className="admin-panel">
+      {/* Header */}
+      <div className="admin-header">
+        <div className="admin-header-left">
+          <button className="back-btn" onClick={onBack}>
+            ⬅️ Bosh sahifa
           </button>
-          <button className="btn-logout" onClick={handleLogout}>
+          <h1>⚙️ Admin Panel</h1>
+        </div>
+        <div className="admin-header-right">
+          <span className="admin-user">👤 {user?.firstName || 'Admin'}</span>
+          <button
+            className="admin-btn admin-btn-secondary"
+            onClick={() => {
+              localStorage.removeItem('adminToken');
+              setIsAuthenticated(false);
+              setAdminKey('');
+            }}
+          >
             🚪 Chiqish
           </button>
         </div>
-      </header>
+      </div>
 
-      {/* XABARLAR */}
-      {error && (
-        <div className="error-message">
-          ⚠️ {error}
-          <button className="close-btn" onClick={() => setError(null)}>✕</button>
-        </div>
-      )}
-      
-      {successMessage && (
-        <div className="success-message">
-          ✅ {successMessage}
-          <button className="close-btn" onClick={() => setSuccessMessage(null)}>✕</button>
-        </div>
-      )}
-
-      {/* TAB NAVIGATION */}
-      <div className="tab-nav">
-        <button 
-          className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          📊 Dashboard
-        </button>
-        <button 
+      {/* Tabs */}
+      <div className="admin-tabs">
+        <button
           className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
           onClick={() => setActiveTab('users')}
         >
           👥 Foydalanuvchilar
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'stats' ? 'active' : ''}`}
-          onClick={() => setActiveTab('stats')}
+          onClick={() => {
+            setActiveTab('stats');
+            fetchStats();
+          }}
         >
-          📈 Statistika
+          📊 Statistika
         </button>
-        <button 
-          className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
+        <button
+          className={`tab-btn ${activeTab === 'socket' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('socket');
+            fetchSocketStatus();
+          }}
         >
-          ⚙️ Sozlamalar
+          🔌 Socket Status
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('logs');
+            fetchLogs();
+          }}
+        >
+          📋 Loglar
         </button>
       </div>
 
-      {/* ============================================================ */}
-      {/* TAB 1: DASHBOARD */}
-      {/* ============================================================ */}
-      {activeTab === 'dashboard' && (
-        <div className="tab-content">
-          {/* STATISTIKA KARTALARI */}
-          <div className="stats-grid">
-            <div className="stat-card primary">
-              <div className="stat-icon">👥</div>
-              <div className="stat-label">Jami O'yinchilar</div>
-              <div className="stat-value">{stats?.totalUsers || 0}</div>
-              <div className="stat-sub">🟢 Online: {stats?.onlineUsers || 0}</div>
-            </div>
-            
-            <div className="stat-card success">
-              <div className="stat-icon">🪙</div>
-              <div className="stat-label">Jami Tangalar</div>
-              <div className="stat-value">{(stats?.totalCoins || 0).toLocaleString()}</div>
-            </div>
-            
-            <div className="stat-card warning">
-              <div className="stat-icon">🏆</div>
-              <div className="stat-label">Umumiy Reyting</div>
-              <div className="stat-value">{(stats?.totalRating || 0).toLocaleString()}</div>
-            </div>
-            
-            <div className="stat-card info">
-              <div className="stat-icon">🎮</div>
-              <div className="stat-label">Jami O'yinlar</div>
-              <div className="stat-value">{(stats?.totalGames || 0).toLocaleString()}</div>
-            </div>
-            
-            <div className="stat-card purple">
-              <div className="stat-icon">🎯</div>
-              <div className="stat-label">Faol Xonalar</div>
-              <div className="stat-value">{stats?.activeRooms || 0}</div>
-            </div>
-            
-            <div className="stat-card danger">
-              <div className="stat-icon">🔍</div>
-              <div className="stat-label">Qidiruv Navbati</div>
-              <div className="stat-value">{stats?.searchQueue || 0}</div>
-            </div>
+      {/* Content */}
+      <div className="admin-content">
+        {error && (
+          <div className="admin-error-banner">
+            ⚠️ {error}
+            <button onClick={() => setError(null)}>✕</button>
           </div>
+        )}
 
-          {/* TOP 10 */}
-          {stats?.top10 && stats.top10.length > 0 && (
-            <div className="table-container">
-              <div className="table-header">
-                <h3 className="table-title">🏆 TOP 10 O'yinchilar</h3>
-              </div>
-              <div className="table-responsive">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Ism</th>
-                      <th>Username</th>
-                      <th>🏆 Reyting</th>
-                      <th>🪙 Tangalar</th>
-                      <th>🎮 O'yinlar</th>
-                      <th>🏅 G'alabalar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.top10.map((player, index) => (
-                      <tr key={player._id || index}>
-                        <td>
-                          <span className={`rank-${index + 1}`}>
-                            #{index + 1}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="avatar-cell">
-                            <img 
-                              src={player.photoUrl || `https://ui-avatars.com/api/?name=${player.firstName}&background=667eea&color=fff`} 
-                              alt={player.firstName}
-                              onError={(e) => e.target.src = `https://ui-avatars.com/api/?name=${player.firstName}&background=667eea&color=fff`}
-                            />
-                            <span className="user-name">{player.firstName}</span>
-                          </div>
-                        </td>
-                        <td>@{player.username || '—'}</td>
-                        <td><strong>{player.rating}</strong></td>
-                        <td>🪙 {player.coins}</td>
-                        <td>{player.totalGames || 0}</td>
-                        <td>
-                          <span className="win-rate">
-                            {player.wins || 0}
-                            {player.totalGames > 0 && (
-                              <span className="win-percent">
-                                ({Math.round((player.wins || 0) / player.totalGames * 100)}%)
-                              </span>
-                            )}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        {activeTab === 'stats' && (
+          <>
+            <StatsCards />
+            <Top10List />
+          </>
+        )}
 
-      {/* ============================================================ */}
-      {/* TAB 2: FOYDALANUVCHILAR */}
-      {/* ============================================================ */}
-      {activeTab === 'users' && (
-        <div className="tab-content">
-          <div className="table-container">
-            <div className="table-header">
-              <div className="table-search">
-                <div className="search-wrapper">
-                  <span className="search-icon">🔍</span>
-                  <input
-                    type="text"
-                    placeholder="Qidirish (ID, Ism yoki Username)..."
-                    value={search}
-                    onChange={handleSearch}
-                    className="search-input"
-                  />
-                </div>
-                <select value={sortBy} onChange={handleSortChange} className="sort-select">
-                  <option value="rating">🏆 Reyting bo'yicha</option>
-                  <option value="coins">🪙 Tanga bo'yicha</option>
-                  <option value="games">🎮 O'yin bo'yicha</option>
-                  <option value="newest">🆕 Yangi bo'yicha</option>
-                </select>
-              </div>
-              
-              <div className="table-actions">
-                {selectedUsers.length > 0 && (
-                  <button className="btn-danger" onClick={bulkDelete}>
-                    🗑️ O'chirish ({selectedUsers.length})
-                  </button>
-                )}
-                <button className="btn-success" onClick={exportUsers}>
-                  📥 Eksport
-                </button>
-              </div>
-            </div>
+        {activeTab === 'users' && <UsersTable />}
 
-            <div className="table-responsive">
-              {loading ? (
-                <div className="loading-state">
-                  <div className="spinner"></div>
-                  <p>Yuklanmoqda...</p>
-                </div>
-              ) : users.length === 0 ? (
-                <div className="empty-state">
-                  <p>📭 Foydalanuvchilar topilmadi</p>
-                </div>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: '40px' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedUsers.length === users.length && users.length > 0}
-                          onChange={toggleSelectAll}
-                        />
-                      </th>
-                      <th>Foydalanuvchi</th>
-                      <th>Telegram ID</th>
-                      <th>🪙 Tangalar</th>
-                      <th>🏆 Reyting</th>
-                      <th>🎮 O'yinlar</th>
-                      <th>📅 Oxirgi faollik</th>
-                      <th style={{ width: '180px' }}>Amallar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <tr key={user._id} className={selectedUsers.includes(user._id) ? 'selected' : ''}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selectedUsers.includes(user._id)}
-                            onChange={() => toggleSelectUser(user._id)}
-                          />
-                        </td>
-                        <td>
-                          <div className="avatar-cell">
-                            <img
-                              src={user.photoUrl || `https://ui-avatars.com/api/?name=${user.firstName}&background=667eea&color=fff`}
-                              alt={user.firstName}
-                              onError={(e) => e.target.src = `https://ui-avatars.com/api/?name=${user.firstName}&background=667eea&color=fff`}
-                            />
-                            <div>
-                              <div className="user-name">{user.firstName}</div>
-                              <div className="user-username">@{user.username || 'username yo\'q'}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="mono">{user.tgId}</td>
-                        <td>
-                          <div className="coin-cell">
-                            <span className="coin-value">{user.coins}</span>
-                            <div className="coin-actions">
-                              <button className="btn-plus" onClick={() => updateCoins(user._id, 50)}>+50</button>
-                              <button className="btn-minus" onClick={() => updateCoins(user._id, -50)}>-50</button>
-                              <button className="btn-plus-big" onClick={() => updateCoins(user._id, 100)}>+100</button>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="rating-badge">{user.rating}</span>
-                        </td>
-                        <td>
-                          <div>
-                            <div>{user.totalGames || 0} o'yin</div>
-                            <div className="games-detail">
-                              🏅 {user.wins || 0} g'alaba
-                              {user.totalGames > 0 && (
-                                <span className="win-percent">
-                                  ({Math.round((user.wins || 0) / user.totalGames * 100)}%)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="date-cell">
-                          {formatDate(user.lastLogin)}
-                        </td>
-                        <td>
-                          <div className="action-buttons">
-                            <button className="btn-edit" onClick={() => openEditModal(user)}>
-                              ✏️ Tahrirlash
-                            </button>
-                            <button className="btn-delete" onClick={() => deleteUser(user._id)}>
-                              🗑️
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+        {activeTab === 'socket' && <SocketStatus />}
 
-            {/* PAGINATION */}
-            {totalPages > 1 && (
-              <div className="pagination">
-                <button 
-                  className="page-btn" 
-                  onClick={() => handlePageChange(currentPage - 1)} 
-                  disabled={currentPage === 1}
-                >
-                  ⬅️
-                </button>
-                
-                {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                  let pageNum = i + 1;
-                  if (currentPage > 3 && totalPages > 5) {
-                    if (i === 0) pageNum = 1;
-                    else if (i === 1) pageNum = currentPage - 1;
-                    else if (i === 2) pageNum = currentPage;
-                    else if (i === 3) pageNum = currentPage + 1;
-                    else if (i === 4) pageNum = totalPages;
-                  }
-                  return (
-                    <button
-                      key={pageNum}
-                      className={`page-btn ${pageNum === currentPage ? 'active' : ''}`}
-                      onClick={() => handlePageChange(pageNum)}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                
-                <button 
-                  className="page-btn" 
-                  onClick={() => handlePageChange(currentPage + 1)} 
-                  disabled={currentPage === totalPages}
-                >
-                  ➡️
-                </button>
-                <span className="page-info">
-                  {totalUsers} ta foydalanuvchi
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+        {activeTab === 'logs' && <LogsView />}
+      </div>
 
-      {/* ============================================================ */}
-      {/* TAB 3: STATISTIKA */}
-      {/* ============================================================ */}
-      {activeTab === 'stats' && (
-        <div className="tab-content">
-          <div className="stats-grid">
-            <div className="stat-card primary">
-              <div className="stat-icon">👥</div>
-              <div className="stat-label">Jami O'yinchilar</div>
-              <div className="stat-value">{stats?.totalUsers || 0}</div>
-              <div className="stat-sub">🟢 Online: {stats?.onlineUsers || 0}</div>
-            </div>
-            
-            <div className="stat-card success">
-              <div className="stat-icon">🪙</div>
-              <div className="stat-label">Jami Tangalar</div>
-              <div className="stat-value">{(stats?.totalCoins || 0).toLocaleString()}</div>
-            </div>
-            
-            <div className="stat-card warning">
-              <div className="stat-icon">🏆</div>
-              <div className="stat-label">Umumiy Reyting</div>
-              <div className="stat-value">{(stats?.totalRating || 0).toLocaleString()}</div>
-            </div>
-            
-            <div className="stat-card info">
-              <div className="stat-icon">🎮</div>
-              <div className="stat-label">Jami O'yinlar</div>
-              <div className="stat-value">{(stats?.totalGames || 0).toLocaleString()}</div>
-            </div>
-          </div>
-
-          {/* Aktivlik */}
-          <div className="table-container" style={{ marginTop: '20px' }}>
-            <div className="table-header">
-              <h3 className="table-title">📊 Aktivlik Ma'lumotlari</h3>
-              <span className="update-time">
-                🕐 Yangilangan: {new Date().toLocaleTimeString('uz-UZ')}
-              </span>
-            </div>
-            <div className="activity-grid">
-              <div className="activity-item">
-                <div className="activity-label">Faol Xonalar</div>
-                <div className="activity-value">{stats?.activeRooms || 0}</div>
-              </div>
-              <div className="activity-item">
-                <div className="activity-label">Qidiruv Navbati</div>
-                <div className="activity-value">{stats?.searchQueue || 0}</div>
-              </div>
-              <div className="activity-item">
-                <div className="activity-label">Online Foydalanuvchilar</div>
-                <div className="activity-value" style={{ color: '#48bb78' }}>{stats?.onlineUsers || 0}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* TAB 4: SOZLAMALAR */}
-      {/* ============================================================ */}
-      {activeTab === 'settings' && (
-        <div className="tab-content">
-          <div className="table-container">
-            <div className="table-header">
-              <h3 className="table-title">⚙️ Sozlamalar</h3>
-            </div>
-            
-            <form onSubmit={(e) => { e.preventDefault(); }} style={{ padding: '24px' }}>
-              <div className="form-group">
-                <label>📱 Ilova Nomi</label>
-                <input
-                  type="text"
-                  value="Like-Duel Admin"
-                  className="admin-input"
-                  disabled
-                  style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>🌐 API URL</label>
-                <input
-                  type="text"
-                  value={API_URL}
-                  className="admin-input"
-                  disabled
-                  style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
-                />
-                <small className="form-hint">
-                  API URL ni o'zgartirish uchun .env faylini tahrirlang
-                </small>
-              </div>
-
-              <div className="form-group">
-                <label>🔑 Admin Token</label>
-                <input
-                  type="password"
-                  value={adminKey}
-                  onChange={(e) => {
-                    setAdminKey(e.target.value);
-                    localStorage.setItem('admin_token', e.target.value);
-                  }}
-                  className="admin-input"
-                  placeholder="Admin token..."
-                />
-                <small className="form-hint">
-                  Token o'zgartirilganda qayta kirish talab qilinadi
-                </small>
-              </div>
-
-              <div className="form-actions">
-                <button type="button" className="btn-warning" onClick={() => {
-                  localStorage.clear();
-                  window.location.reload();
-                }}>
-                  🗑️ Keshni Tozalash
-                </button>
-                <button type="button" className="btn-primary" onClick={() => {
-                  setSuccessMessage('✅ Sozlamalar saqlandi');
-                  setTimeout(() => setSuccessMessage(null), 3000);
-                }}>
-                  💾 Saqlash
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* System Info */}
-          <div className="table-container" style={{ marginTop: '20px' }}>
-            <div className="table-header">
-              <h3 className="table-title">ℹ️ Tizim Ma'lumotlari</h3>
-            </div>
-            <div className="system-info">
-              <div className="info-item">
-                <span className="info-label">Versiya</span>
-                <span className="info-value">v2.0.0</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">React Versiya</span>
-                <span className="info-value">{React.version}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">Environment</span>
-                <span className="info-value">{import.meta.env?.MODE || 'production'}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">Foydalanuvchilar</span>
-                <span className="info-value">{stats?.totalUsers || 0}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* TAHRIRLASH MODAL */}
-      {/* ============================================================ */}
-      {showEditModal && editingUser && (
-        <div className="modal-overlay" onClick={closeEditModal}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>✏️ Foydalanuvchini Tahrirlash</h3>
-              <button className="modal-close" onClick={closeEditModal}>✕</button>
-            </div>
-            
-            <form onSubmit={handleSaveUser}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Ismi *</label>
-                  <input
-                    type="text"
-                    value={editingUser.firstName || ''}
-                    onChange={(e) => setEditingUser({...editingUser, firstName: e.target.value})}
-                    className="admin-input"
-                    required
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Username</label>
-                  <input
-                    type="text"
-                    value={editingUser.username || ''}
-                    onChange={(e) => setEditingUser({...editingUser, username: e.target.value})}
-                    className="admin-input"
-                  />
-                </div>
-                
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>🪙 Tangalar *</label>
-                    <input
-                      type="number"
-                      value={editingUser.coins || 0}
-                      onChange={(e) => setEditingUser({...editingUser, coins: e.target.value})}
-                      className="admin-input"
-                      min="0"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>🏆 Reyting *</label>
-                    <input
-                      type="number"
-                      value={editingUser.rating || 0}
-                      onChange={(e) => setEditingUser({...editingUser, rating: e.target.value})}
-                      className="admin-input"
-                      min="0"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Rasm URL</label>
-                  <input
-                    type="text"
-                    value={editingUser.photoUrl || ''}
-                    onChange={(e) => setEditingUser({...editingUser, photoUrl: e.target.value})}
-                    className="admin-input"
-                    placeholder="https://example.com/avatar.jpg"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Telegram ID</label>
-                  <input
-                    type="text"
-                    value={editingUser.tgId || ''}
-                    className="admin-input"
-                    disabled
-                    style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
-                  />
-                  <small className="form-hint">Telegram ID o'zgartirib bo'lmaydi</small>
-                </div>
-              </div>
-              
-              <div className="modal-footer">
-                <button type="button" className="btn-cancel" onClick={closeEditModal}>
-                  ❌ Bekor qilish
-                </button>
-                <button type="submit" className="btn-save" disabled={loading}>
-                  {loading ? '⏳ Saqlanmoqda...' : '💾 Saqlash'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modals */}
+      <EditModal />
+      <DeleteModal />
     </div>
   );
 }
 
-export default App;
+export default AdminPanel;
